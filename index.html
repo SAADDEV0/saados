@@ -2710,6 +2710,7 @@ let mizanPeriod = 'today'; // 'today' | '7d' | '30d' | '365d'
 let currentDate = todayStr();
 let sijjilMode = 'write'; // 'write' | 'memories'
 let gdriveToken = null;
+let gdriveTokenExpiry = 0; // ms timestamp when current token expires
 let syncDebounce = null;
 let syncState = 'idle'; // 'idle' | 'syncing' | 'ok' | 'error' | 'offline'
 let driveReady = false; // true only after successful pull or confirmed new account — blocks any push before that
@@ -2740,12 +2741,17 @@ function setSyncState(s, detail) {
 ════════════════════════════════════════════════ */
 function markUnsaved() {
   if(!driveReady) return;
-  if(!gdriveToken || !DB.gdrive.connected) { setSyncState('offline'); return; }
+  if(!DB.gdrive.connected) { setSyncState('offline'); return; }
   markDayDirty(currentDate);
   setSyncState('syncing');
   clearTimeout(syncDebounce);
   syncDebounce = setTimeout(async () => {
     try {
+      // If token is missing or expiring in the next 2 min, refresh silently first
+      if(!gdriveToken || Date.now() > gdriveTokenExpiry - 2 * 60 * 1000) {
+        await silentDriveAuth(false);
+      }
+      if(!gdriveToken) { setSyncState('offline'); return; }
       await drivePush();
       setSyncState('ok');
     } catch(e) {
@@ -2757,7 +2763,7 @@ function markUnsaved() {
       if(lbl) lbl.textContent = 'Sync failed — ' + e.message;
       // Auto-retry after 8s
       setTimeout(() => {
-        if(syncState === 'error' && gdriveToken && driveReady) {
+        if(syncState === 'error' && DB.gdrive.connected && driveReady) {
           setSyncState('syncing');
           drivePush()
             .then(() => setSyncState('ok'))
@@ -4399,7 +4405,18 @@ const _dayImgFolderCache = {};
 
 async function _driveGet(url) {
   const r = await fetch(url, { headers:{ Authorization:'Bearer '+gdriveToken } });
-  if(r.status===401) { gdriveToken=null; DB.gdrive.connected=false; setSyncState('offline'); throw new Error('Token expired'); }
+  if(r.status===401) {
+    // Token expired mid-session — try a silent refresh once before giving up
+    console.warn('Drive 401 — attempting silent token refresh…');
+    await silentDriveAuth(false);
+    if(gdriveToken) {
+      // Retry the original request with the new token
+      const r2 = await fetch(url, { headers:{ Authorization:'Bearer '+gdriveToken } });
+      if(r2.status===401) { gdriveToken=null; DB.gdrive.connected=false; setSyncState('offline'); throw new Error('Token expired'); }
+      return r2;
+    }
+    gdriveToken=null; DB.gdrive.connected=false; setSyncState('offline'); throw new Error('Token expired');
+  }
   return r;
 }
 
@@ -5589,23 +5606,34 @@ async function silentDriveAuth(interactive=false) {
   if(!DB.gdrive.clientId) return;
   try {
     await loadGIS();
-    gdriveToken = await new Promise((res,rej) => {
+    const tokenResponse = await new Promise((res,rej) => {
       const cl = google.accounts.oauth2.initTokenClient({
         client_id: DB.gdrive.clientId,
         scope: 'https://www.googleapis.com/auth/drive',
-        callback: r => r.error ? rej(r.error) : res(r.access_token),
+        callback: r => r.error ? rej(r.error) : res(r),
       });
       cl.requestAccessToken({prompt: interactive ? '' : 'none'});
     });
+    gdriveToken = tokenResponse.access_token;
+    // Track expiry: GIS tokens typically last 3600s; use expires_in if available
+    const expiresIn = tokenResponse.expires_in ? parseInt(tokenResponse.expires_in) : 3600;
+    gdriveTokenExpiry = Date.now() + expiresIn * 1000;
     DB.gdrive.connected = true;
     sessionStorage.setItem('raqib_cid', DB.gdrive.clientId);
-    // Schedule token refresh before expiry (tokens last ~1h)
+    // Schedule proactive token refresh at 55 min (well before 1h expiry)
     setTimeout(() => silentDriveAuth(false), 55 * 60 * 1000);
   } catch(e) {
-    if(interactive) alert('Could not connect to Drive: ' + e);
-    DB.gdrive.connected = false;
-    gdriveToken = null;
-    setSyncState('error');
+    if(interactive) {
+      alert('Could not connect to Drive: ' + e);
+      DB.gdrive.connected = false;
+      gdriveToken = null;
+      gdriveTokenExpiry = 0;
+      setSyncState('error');
+    } else {
+      // Silent refresh failed — don't disconnect the session, just log it.
+      // The token may still be valid; we'll retry on next markUnsaved.
+      console.warn('Silent Drive token refresh failed (will retry on next save):', e);
+    }
   }
 }
 
