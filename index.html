@@ -1335,6 +1335,55 @@ textarea.fi { resize: vertical; min-height: 80px; }
 .sj-add-btn input[type=file] {
   position: absolute; inset: 0; opacity: 0; cursor: pointer;
 }
+
+/* ── Camera overlay ── */
+#sj-camera-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: #000;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+}
+#sj-camera-overlay video {
+  width: 100%; height: 100%; object-fit: cover; position: absolute; inset: 0;
+}
+#sj-camera-overlay canvas { display: none; }
+.sj-cam-bar {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  padding: 28px 32px env(safe-area-inset-bottom, 16px);
+  display: flex; align-items: center; justify-content: space-between;
+  background: linear-gradient(transparent, rgba(0,0,0,0.7));
+}
+.sj-cam-close {
+  width: 48px; height: 48px; border-radius: 50%;
+  background: rgba(255,255,255,0.2); border: none; color: #fff;
+  font-size: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(4px);
+}
+.sj-cam-shutter {
+  width: 72px; height: 72px; border-radius: 50%;
+  background: #fff; border: 4px solid rgba(255,255,255,0.5);
+  cursor: pointer; box-shadow: 0 0 0 3px rgba(255,255,255,0.3);
+  transition: transform 0.1s, background 0.1s;
+  flex-shrink: 0;
+}
+.sj-cam-shutter:active { transform: scale(0.92); background: #ddd; }
+.sj-cam-flip {
+  width: 48px; height: 48px; border-radius: 50%;
+  background: rgba(255,255,255,0.2); border: none; color: #fff;
+  font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(4px);
+}
+.sj-cam-err {
+  color: #fff; text-align: center; padding: 32px; font-family: var(--sans);
+  display: flex; flex-direction: column; gap: 16px; align-items: center; position: relative; z-index: 1;
+}
+.sj-cam-err-title { font-size: 18px; font-weight: 600; }
+.sj-cam-err-msg { font-size: 14px; opacity: 0.75; max-width: 280px; line-height: 1.5; }
+.sj-cam-err-close {
+  margin-top: 8px; padding: 10px 28px; border-radius: 50px;
+  background: rgba(255,255,255,0.2); border: 1.5px solid rgba(255,255,255,0.4);
+  color: #fff; font-size: 14px; cursor: pointer;
+}
 .sj-gallery-body { padding: 14px; }
 
 /* grid — masonry feel */
@@ -4125,7 +4174,7 @@ function renderSijjilWrite(el, dateLabel) {
         <span class="sj-gallery-label">
           Media ${mediaCount ? `<span class="sj-gallery-count">${mediaCount}</span>` : ''}
         </span>
-        <div style="display:flex;gap:6px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="sj-add-btn">
             📷 Photo
             <input type="file" accept="image/*" multiple onchange="sjImgPick(event)" />
@@ -4133,6 +4182,9 @@ function renderSijjilWrite(el, dateLabel) {
           <button class="sj-add-btn">
             🎬 Video
             <input type="file" accept="video/*" multiple onchange="sjVideoPick(event)" />
+          </button>
+          <button class="sj-add-btn sj-camera-btn" onclick="sjOpenCamera(event)">
+            📸 Camera
           </button>
         </div>
       </div>
@@ -4334,6 +4386,119 @@ function sjRemoveTag(t) {
 /* ── Sijjil images ── */
 function sjImgPick(e) { Array.from(e.target.files).forEach(f => sjUploadImg(f)); e.target.value = ''; }
 function sjVideoPick(e) { Array.from(e.target.files).forEach(f => sjUploadVideo(f)); e.target.value = ''; }
+
+/* ── Camera ── */
+let _camStream = null;
+let _camFacing = 'environment'; // 'environment' = rear, 'user' = front
+
+async function sjOpenCamera(e) {
+  e.stopPropagation();
+
+  // If getUserMedia not supported (old browser), fall back to file input with capture
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/*'; inp.capture = 'environment';
+    inp.onchange = ev => { Array.from(ev.target.files).forEach(f => sjUploadImg(f)); };
+    inp.click();
+    return;
+  }
+
+  // Build overlay
+  const overlay = document.createElement('div');
+  overlay.id = 'sj-camera-overlay';
+
+  const video = document.createElement('video');
+  video.setAttribute('playsinline', ''); // critical for iOS
+  video.setAttribute('autoplay', '');
+  video.setAttribute('muted', '');
+
+  const canvas = document.createElement('canvas');
+
+  const bar = document.createElement('div');
+  bar.className = 'sj-cam-bar';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'sj-cam-close';
+  closeBtn.innerHTML = '✕';
+  closeBtn.onclick = sjCloseCamera;
+
+  const shutter = document.createElement('button');
+  shutter.className = 'sj-cam-shutter';
+  shutter.title = 'Take photo';
+  shutter.onclick = () => sjCamSnap(video, canvas);
+
+  const flipBtn = document.createElement('button');
+  flipBtn.className = 'sj-cam-flip';
+  flipBtn.innerHTML = '🔄';
+  flipBtn.title = 'Flip camera';
+  flipBtn.onclick = sjCamFlip;
+
+  bar.appendChild(closeBtn);
+  bar.appendChild(shutter);
+  bar.appendChild(flipBtn);
+  overlay.appendChild(video);
+  overlay.appendChild(canvas);
+  overlay.appendChild(bar);
+  document.body.appendChild(overlay);
+
+  await sjCamStart(video, overlay);
+}
+
+async function sjCamStart(video, overlay) {
+  try {
+    if(_camStream) { _camStream.getTracks().forEach(t => t.stop()); }
+    _camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: _camFacing, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: false
+    });
+    video.srcObject = _camStream;
+  } catch(err) {
+    // Permission denied or no camera — show friendly error
+    const errMsg = err.name === 'NotAllowedError'
+      ? 'Camera permission was denied. Please allow camera access in your browser settings and try again.'
+      : err.name === 'NotFoundError'
+      ? 'No camera found on this device.'
+      : 'Could not start camera: ' + err.message;
+
+    // Remove video/bar, show error UI
+    if(overlay) {
+      overlay.innerHTML = `
+        <div class="sj-cam-err">
+          <div style="font-size:48px">📷</div>
+          <div class="sj-cam-err-title">Camera Unavailable</div>
+          <div class="sj-cam-err-msg">${errMsg}</div>
+          <button class="sj-cam-err-close" onclick="sjCloseCamera()">Close</button>
+        </div>`;
+    }
+  }
+}
+
+async function sjCamFlip() {
+  _camFacing = _camFacing === 'environment' ? 'user' : 'environment';
+  const overlay = document.getElementById('sj-camera-overlay');
+  const video = overlay?.querySelector('video');
+  if(video) await sjCamStart(video, overlay);
+}
+
+function sjCamSnap(video, canvas) {
+  canvas.width  = video.videoWidth  || 1280;
+  canvas.height = video.videoHeight || 720;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  canvas.toBlob(blob => {
+    if(!blob) return;
+    const ts = new Date().toISOString().replace(/[:.]/g,'-');
+    const file = new File([blob], `photo-${ts}.jpg`, { type: 'image/jpeg' });
+    sjCloseCamera();
+    sjUploadImg(file);
+  }, 'image/jpeg', 0.92);
+}
+
+function sjCloseCamera() {
+  if(_camStream) { _camStream.getTracks().forEach(t => t.stop()); _camStream = null; }
+  document.getElementById('sj-camera-overlay')?.remove();
+}
 function sjDropOver(e) { e.preventDefault(); document.getElementById('sj-drop')?.classList.add('drag-over'); }
 function sjDropLeave(e) { document.getElementById('sj-drop')?.classList.remove('drag-over'); }
 function sjDropDrop(e) {
