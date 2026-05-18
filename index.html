@@ -1187,6 +1187,52 @@ textarea.fi { resize: vertical; min-height: 80px; }
 .sj-datestamp::before, .sj-datestamp::after {
   content: ''; flex: 1; height: 1px; background: var(--border);
 }
+.sj-date-nav {
+  display: flex; align-items: center; justify-content: center;
+  gap: 10px; margin-bottom: 24px;
+}
+.sj-date-arrow {
+  width: 32px; height: 32px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  border-radius: 50%;
+  color: var(--ink3);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s var(--ease);
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
+}
+.sj-date-arrow:hover { border-color: var(--gold); color: var(--gold); transform: scale(1.05); }
+.sj-date-label {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 15px;
+  color: var(--ink3);
+  cursor: pointer;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1.5px solid transparent;
+  transition: all 0.2s var(--ease);
+  position: relative;
+  white-space: nowrap;
+}
+.sj-date-label:hover { border-color: var(--border); background: var(--surface); color: var(--gold); }
+.sj-date-label input[type="date"] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; border: none;
+}
+.sj-date-today-pill {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.5px;
+  padding: 4px 11px;
+  background: var(--text); color: var(--bg);
+  border-radius: 20px; cursor: pointer;
+  transition: all 0.2s var(--ease);
+  border: none; font-family: var(--sans);
+  flex-shrink: 0;
+}
+.sj-date-today-pill:hover { background: var(--gold); }
+.sj-date-today-pill.hidden { opacity: 0; pointer-events: none; }
 
 /* Main writing area */
 .sj-body-wrap {
@@ -2709,6 +2755,7 @@ let currentSection = 'niyyah';
 let mizanPeriod = 'today'; // 'today' | '7d' | '30d' | '365d'
 let currentDate = todayStr();
 let sijjilMode = 'write'; // 'write' | 'memories'
+let sijjilDate = todayStr(); // independent date for journal write mode
 let gdriveToken = null;
 let gdriveTokenExpiry = 0; // ms timestamp when current token expires
 let syncDebounce = null;
@@ -4014,9 +4061,28 @@ function renderMuhasabah(el) {
 
 function setSijjilMode(mode) { sijjilMode = mode; renderSection(); }
 
+function sjDateShift(delta) {
+  const d = new Date(sijjilDate+'T12:00:00');
+  d.setDate(d.getDate() + delta);
+  const next = d.toISOString().split('T')[0];
+  if(next > todayStr()) return; // can't go into the future
+  sijjilDate = next;
+  renderSection();
+}
+function sjDatePick(val) {
+  if(!val) return;
+  if(val > todayStr()) return;
+  sijjilDate = val;
+  renderSection();
+}
+function sjDateToday() {
+  sijjilDate = todayStr();
+  renderSection();
+}
+
 /* ── Write mode ── */
 function renderSijjilWrite(el, dateLabel) {
-  const day = getDay(currentDate);
+  const day = getDay(sijjilDate);
   if(!day.journal) day.journal = { text:'', tags:[], images:[], videos:[] };
   if(day.journal.free !== undefined && !day.journal.text) {
     day.journal.text = [day.journal.shukr||'', day.journal.amal||'', day.journal.azm||'', day.journal.free||''].filter(Boolean).join('\n\n');
@@ -4027,10 +4093,22 @@ function renderSijjilWrite(el, dateLabel) {
   const wordCount = (j.text||'').trim().split(/\s+/).filter(Boolean).length;
   const mediaCount = images.length + videos.length;
 
+  const sjD = new Date(sijjilDate+'T12:00:00');
+  const sjDateLabel = sjD.toLocaleDateString('en-US',{weekday:'long', month:'long', day:'numeric', year:'numeric'});
+  const isToday = sijjilDate === todayStr();
+
   const wrap = document.createElement('div');
 
   wrap.innerHTML = `
-    <div class="sj-datestamp">${dateLabel}</div>
+    <div class="sj-date-nav">
+      <button class="sj-date-arrow" onclick="sjDateShift(-1)">‹</button>
+      <div class="sj-date-label" title="Pick a date">
+        ${sjDateLabel}
+        <input type="date" value="${sijjilDate}" max="${todayStr()}" onchange="sjDatePick(this.value)" />
+      </div>
+      <button class="sj-date-arrow" onclick="sjDateShift(1)" ${isToday?'disabled style="opacity:0.3;cursor:default"':''}>›</button>
+      <button class="sj-date-today-pill ${isToday?'hidden':''}" onclick="sjDateToday()">Today</button>
+    </div>
 
     <div class="sj-body-wrap">
       <textarea class="sj-ta" id="sj-ta" rows="10"
@@ -4220,14 +4298,13 @@ async function loadAllMedia(allDates) {
 }
 
 function tmGoDay(dateStr) {
-  currentDate = dateStr;
+  sijjilDate = dateStr;
   sijjilMode = 'write';
-  renderHero();
   renderSection();
 }
 
 function sjSave(v) {
-  const d = getDay(currentDate);
+  const d = getDay(sijjilDate);
   if(!d.journal) d.journal = {};
   d.journal.text = v;
   const wc = v.trim().split(/\s+/).filter(Boolean).length;
@@ -4244,14 +4321,14 @@ function sjTagKD(e) {
     e.preventDefault();
     const v = e.target.value.trim().replace(/,/g,'');
     if(!v) return;
-    const d = getDay(currentDate);
+    const d = getDay(sijjilDate);
     if(!d.journal) d.journal = {};
     if(!d.journal.tags) d.journal.tags = [];
     if(!d.journal.tags.includes(v)) { d.journal.tags.push(v); markUnsaved(); renderSection(); }
   }
 }
 function sjRemoveTag(t) {
-  const d = getDay(currentDate);
+  const d = getDay(sijjilDate);
   if(!d.journal?.tags) return;
   d.journal.tags = d.journal.tags.filter(x => x !== t);
   markUnsaved(); renderSection();
@@ -4277,7 +4354,7 @@ async function sjUploadImg(file) {
   const dropText = document.querySelector('.sj-drop-text');
   if(dropText) dropText.textContent = `Uploading ${file.name}…`;
   try {
-    const folderId = await getOrCreateDayImgFolder(currentDate);
+    const folderId = await getOrCreateDayImgFolder(sijjilDate);
     const fm = new FormData();
     fm.append('metadata', new Blob([JSON.stringify({ name: file.name, parents: [folderId] })], { type: 'application/json' }));
     fm.append('file', file);
@@ -4287,7 +4364,7 @@ async function sjUploadImg(file) {
     );
     if(!res.ok) throw new Error('Upload failed: ' + res.status);
     const uploaded = await res.json();
-    const d = getDay(currentDate);
+    const d = getDay(sijjilDate);
     if(!d.journal) d.journal = {};
     if(!d.journal.images) d.journal.images = [];
     d.journal.images.push({ driveId: uploaded.id, name: uploaded.name, addedAt: new Date().toISOString() });
@@ -4307,7 +4384,7 @@ async function sjUploadVideo(file) {
   uploadMsg.textContent = `Uploading video: ${file.name}…`;
   if(gallery) gallery.appendChild(uploadMsg);
   try {
-    const folderId = await getOrCreateDayVideoFolder(currentDate);
+    const folderId = await getOrCreateDayVideoFolder(sijjilDate);
     const fm = new FormData();
     fm.append('metadata', new Blob([JSON.stringify({ name: file.name, parents: [folderId] })], { type: 'application/json' }));
     fm.append('file', file);
@@ -4317,7 +4394,7 @@ async function sjUploadVideo(file) {
     );
     if(!res.ok) throw new Error('Upload failed: ' + res.status);
     const uploaded = await res.json();
-    const d = getDay(currentDate);
+    const d = getDay(sijjilDate);
     if(!d.journal) d.journal = {};
     if(!d.journal.videos) d.journal.videos = [];
     d.journal.videos.push({ driveId: uploaded.id, name: uploaded.name, addedAt: new Date().toISOString(), type: file.type });
@@ -4329,7 +4406,7 @@ async function sjUploadVideo(file) {
 }
 
 async function sjDeleteImg(idx) {
-  const d = getDay(currentDate);
+  const d = getDay(sijjilDate);
   if(!d.journal?.images) return;
   if(!confirm('Remove this photo?')) return;
   const img = d.journal.images[idx];
@@ -4341,7 +4418,7 @@ async function sjDeleteImg(idx) {
 }
 
 async function sjDeleteVideo(idx) {
-  const d = getDay(currentDate);
+  const d = getDay(sijjilDate);
   if(!d.journal?.videos) return;
   if(!confirm('Remove this video?')) return;
   const vid = d.journal.videos[idx];
