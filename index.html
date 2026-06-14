@@ -1464,6 +1464,77 @@ textarea.fi { resize: vertical; min-height: 80px; }
   box-shadow: var(--shadow-sm);
 }
 
+/* ── Journal search ── */
+.sj-search-wrap {
+  position: relative;
+  margin-bottom: 18px;
+}
+.sj-search-input {
+  width: 100%;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 50px;
+  padding: 12px 40px 12px 18px;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--text);
+  outline: none;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.2s;
+}
+.sj-search-input:focus { border-color: var(--gold); }
+.sj-search-input::placeholder { color: var(--text4); }
+.sj-search-clear {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  background: none; border: none;
+  font-size: 13px; color: var(--text4);
+  cursor: pointer; padding: 6px;
+}
+.sj-search-clear:hover { color: var(--text2); }
+
+.sj-search-results {
+  margin-bottom: 24px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.sj-search-count {
+  font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--gold); font-weight: 600;
+  margin-bottom: 2px;
+}
+.sj-search-empty {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--text3);
+  padding: 12px 4px;
+}
+.sj-search-result {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: all 0.2s var(--ease);
+  box-shadow: var(--shadow-sm);
+}
+.sj-search-result:hover { border-color: var(--gold); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.sj-search-date {
+  font-size: 10px; font-weight: 600; letter-spacing: 1px;
+  text-transform: uppercase; color: var(--gold);
+  margin-bottom: 6px;
+}
+.sj-search-snippet {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.6;
+}
+.sj-search-tags {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  margin-top: 8px;
+}
+
 /* ── Time Machine ── */
 .tm-wrap { padding-bottom: 32px; }
 
@@ -2919,7 +2990,8 @@ let DB = {
 let currentSection = 'niyyah';
 let mizanPeriod = 'today'; // 'today' | '7d' | '30d' | '365d'
 let currentDate = todayStr();
-let sijjilMode = 'write'; // 'write' | 'memories'
+let sijjilMode = 'write'; // 'write' | 'memories' | 'gallery'
+let sjSearchQuery = '';
 let sijjilDate = todayStr(); // independent date for journal write mode
 let gdriveToken = null;
 let gdriveTokenExpiry = 0; // ms timestamp when current token expires
@@ -4234,6 +4306,13 @@ function renderMuhasabah(el) {
     <button class="sj-mode-btn ${sijjilMode==='gallery'?'active':''}" onclick="setSijjilMode('gallery')">🖼 Gallery</button>
   </div>`;
 
+  h += `<div class="sj-search-wrap">
+    <input type="text" class="sj-search-input" id="sj-search-input" placeholder="🔍 Search your journal (text or #tags)…"
+      value="${esc(sjSearchQuery)}" oninput="sjSearchInput(this.value)" onkeydown="if(event.key==='Enter')sjSearchGo()" />
+    ${sjSearchQuery ? `<button class="sj-search-clear" onclick="sjSearchClear()">✕</button>` : ''}
+  </div>`;
+  if(sjSearchQuery) h += renderSjSearchResults();
+
   el.innerHTML = h;
 
   if(sijjilMode === 'write') {
@@ -4246,6 +4325,92 @@ function renderMuhasabah(el) {
 }
 
 function setSijjilMode(mode) { sijjilMode = mode; renderSection(); }
+
+/* ── Journal search ── */
+function sjSearchInput(v) {
+  sjSearchQuery = v;
+  // re-render just enough to update results (debounced via simple timeout)
+  clearTimeout(_sjSearchTimer);
+  _sjSearchTimer = setTimeout(() => {
+    renderSection();
+    // restore focus + cursor position after re-render
+    const inp = document.getElementById('sj-search-input');
+    if(inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  }, 200);
+}
+let _sjSearchTimer = null;
+
+function sjSearchClear() {
+  sjSearchQuery = '';
+  renderSection();
+}
+
+function sjSearchMatches() {
+  const q = sjSearchQuery.trim().toLowerCase();
+  if(!q) return [];
+  const isTag = q.startsWith('#');
+  const term = isTag ? q.slice(1) : q;
+  if(!term) return [];
+
+  const results = [];
+  Object.keys(DB.days).forEach(ds => {
+    const j = DB.days[ds]?.journal;
+    if(!j) return;
+    const text = (j.text || j.free || '').toLowerCase();
+    const tags = (j.tags || []).map(t => t.toLowerCase());
+
+    let match = false, snippet = '';
+    if(isTag) {
+      match = tags.some(t => t.includes(term));
+    } else {
+      match = text.includes(term) || tags.some(t => t.includes(term));
+    }
+    if(match) {
+      const idx = text.indexOf(term);
+      if(idx >= 0) {
+        const start = Math.max(0, idx - 30);
+        snippet = (start>0?'…':'') + text.slice(start, idx + term.length + 30).trim() + '…';
+      } else {
+        snippet = (j.text || j.free || '').trim().slice(0, 80);
+      }
+      results.push({ date: ds, snippet, tags: j.tags||[] });
+    }
+  });
+  return results.sort((a,b) => b.date.localeCompare(a.date));
+}
+
+function renderSjSearchResults() {
+  const results = sjSearchMatches();
+  if(!results.length) {
+    return `<div class="sj-search-results">
+      <div class="sj-search-empty">No entries match “${esc(sjSearchQuery)}”.</div>
+    </div>`;
+  }
+  return `<div class="sj-search-results">
+    <div class="sj-search-count">${results.length} entr${results.length===1?'y':'ies'} found</div>
+    ${results.map(r => {
+      const d = new Date(r.date+'T12:00:00');
+      const label = d.toLocaleDateString('en-US',{weekday:'short', month:'short', day:'numeric', year:'numeric'});
+      return `<div class="sj-search-result" onclick="sjSearchGoToDay('${r.date}')">
+        <div class="sj-search-date">${label}</div>
+        ${r.snippet ? `<div class="sj-search-snippet">${esc(r.snippet)}</div>` : ''}
+        ${r.tags.length ? `<div class="sj-search-tags">${r.tags.map(t=>`<span class="tm-card-tag">${esc(t)}</span>`).join('')}</div>` : ''}
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function sjSearchGo() {
+  const results = sjSearchMatches();
+  if(results.length) sjSearchGoToDay(results[0].date);
+}
+
+function sjSearchGoToDay(dateStr) {
+  sjSearchQuery = '';
+  sijjilDate = dateStr;
+  sijjilMode = 'write';
+  renderSection();
+}
 
 function sjDateShift(delta) {
   const d = new Date(sijjilDate+'T12:00:00');
@@ -4496,6 +4661,7 @@ const _galleryUrlCache = {};
 const _galleryFetchPromises = {};
 
 let galleryView = 'masonry'; // 'masonry' | 'pinterest'
+let galleryTypeFilter = 'all'; // 'all' | 'images' | 'videos'
 
 // Build the flat list of all media items across all days (newest first)
 function collectGalleryItems() {
@@ -4542,11 +4708,17 @@ function renderGallery(el) {
   wrap.className = 'gal-wrap';
 
   // collect all media items from all days, newest first
-  const items = collectGalleryItems();
+  const allItems = collectGalleryItems();
 
-  let h = `<div class="gal-count-sub">${items.length} item${items.length===1?'':'s'} from all your entries</div>`;
+  // filter by type, but keep original index (i) for cache/placeholder lookups
+  const indexed = allItems.map((it,i)=>({it,i}));
+  const items = galleryTypeFilter === 'images' ? indexed.filter(x=>x.it.type==='image')
+    : galleryTypeFilter === 'videos' ? indexed.filter(x=>x.it.type==='video')
+    : indexed;
 
-  if(!items.length) {
+  let h = `<div class="gal-count-sub">${allItems.length} item${allItems.length===1?'':'s'} from all your entries</div>`;
+
+  if(!allItems.length) {
     h += `<div class="tm-empty">
       <div class="tm-empty-icon">🖼</div>
       <div class="tm-empty-text">No photos or videos yet.<br>Anything you add to Sijjil entries will show up here.</div>
@@ -4565,11 +4737,27 @@ function renderGallery(el) {
     ${views.map(v=>`<button class="gal-view-btn ${galleryView===v.id?'active':''}" onclick="setGalleryView('${v.id}')">${v.label}</button>`).join('')}
   </div>`;
 
+  // Type filter
+  const typeCount = { all: allItems.length, images: allItems.filter(x=>x.type==='image').length, videos: allItems.filter(x=>x.type==='video').length };
+  const filters = [
+    { id:'all',    label:`All ${typeCount.all}` },
+    { id:'images', label:`🖼 Images ${typeCount.images}` },
+    { id:'videos', label:`🎬 Videos ${typeCount.videos}` },
+  ];
+  h += `<div class="gal-view-row">
+    ${filters.map(f=>`<button class="gal-view-btn ${galleryTypeFilter===f.id?'active':''}" onclick="setGalleryTypeFilter('${f.id}')">${f.label}</button>`).join('')}
+  </div>`;
+
   h += `<button id="gal-load-btn" class="gal-load-btn ${galleryLoaded?'loaded':''}" ${galleryLoading?'disabled':''} onclick="loadGalleryMedia()">${galleryLoaded ? '✓ Loaded' : (galleryLoading ? 'Loading…' : '🖼 Load images')}</button>`;
 
-  if(galleryView === 'pinterest') {
+  if(!items.length) {
+    h += `<div class="tm-empty">
+      <div class="tm-empty-icon">${galleryTypeFilter==='videos'?'🎬':'🖼'}</div>
+      <div class="tm-empty-text">No ${galleryTypeFilter} yet.</div>
+    </div>`;
+  } else if(galleryView === 'pinterest') {
     h += `<div class="gal-pinterest" id="gal-grid">`;
-    items.forEach((it, i) => {
+    items.forEach(({it,i}) => {
       h += `<div class="gal-item gal-pin-item" data-i="${i}" onclick="openJLightbox('${esc(it.driveId||'')}','${it.type}')">
         <div class="gal-item-ph" id="gal-ph-${i}">${it.type==='video' ? '🎬' : '🖼'}</div>
         ${it.type==='video' ? '<div class="gal-play">▶</div>' : ''}
@@ -4579,8 +4767,8 @@ function renderGallery(el) {
   } else {
     // soft masonry (default)
     h += `<div class="gal-masonry" id="gal-grid">`;
-    items.forEach((it, i) => {
-      const span = [1,2,1,1,2,1,1,1][i % 8]; // varied heights via row-span
+    items.forEach(({it,i}, idx) => {
+      const span = [1,2,1,1,2,1,1,1][idx % 8]; // varied heights via row-span
       h += `<div class="gal-item gal-masonry-item span-${span}" data-i="${i}" onclick="openJLightbox('${esc(it.driveId||'')}','${it.type}')">
         <div class="gal-item-ph" id="gal-ph-${i}">${it.type==='video' ? '🎬' : '🖼'}</div>
         ${it.type==='video' ? '<div class="gal-play">▶</div>' : ''}
@@ -4599,6 +4787,11 @@ function renderGallery(el) {
 
 function setGalleryView(v) {
   galleryView = v;
+  renderSection();
+}
+
+function setGalleryTypeFilter(f) {
+  galleryTypeFilter = f;
   renderSection();
 }
 
