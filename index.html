@@ -1586,6 +1586,63 @@ textarea.fi { resize: vertical; min-height: 80px; }
   line-height: 1.65;
 }
 
+/* ── Gallery ── */
+.gal-wrap { padding-bottom: 12px; }
+.gal-load-btn {
+  display: block; margin: 0 auto 20px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 50px;
+  padding: 10px 28px;
+  font-family: var(--sans);
+  font-size: 13px; font-weight: 500;
+  color: var(--ink3);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s var(--ease);
+}
+.gal-load-btn:hover { border-color: var(--gold); color: var(--gold); }
+.gal-load-btn:disabled { cursor: default; opacity: 0.7; }
+.gal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  width: 100%;
+}
+.gal-item {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  cursor: pointer;
+}
+.gal-item-ph {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px; opacity: 0.18;
+}
+.gal-item img, .gal-item video {
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
+  transition: transform 0.3s var(--ease);
+}
+.gal-item:hover img, .gal-item:hover video { transform: scale(1.04); }
+.gal-play {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; color: rgba(255,255,255,0.9);
+  background: rgba(10,9,8,0.18);
+  pointer-events: none;
+}
+@media (min-width: 640px) {
+  .gal-grid { grid-template-columns: repeat(4, 1fr); gap: 8px; }
+}
+@media (min-width: 960px) {
+  .gal-grid { grid-template-columns: repeat(6, 1fr); gap: 10px; }
+}
+
+
 /* image lightbox */
 #j-lightbox {
   display: none;
@@ -2756,6 +2813,7 @@ const NAV = [
   { id:'salat',     en:'Salat',     ar:'صلاة',    icon:'☽' },
   { id:'amal',      en:'Amal',      ar:'عمل',     icon:'◈' },
   { id:'muhasabah', en:'Sijjil',    ar:'سجلّ',    icon:'✎' },
+  { id:'gallery',   en:'Gallery',   ar:'معرض',    icon:'🖼' },
   { id:'mizan',     en:'Mizan',     ar:'ميزان',   icon:'⚖' },
   { id:'mal',       en:'Māl',       ar:'مال',     icon:'◎' },
 ];
@@ -3301,6 +3359,7 @@ function renderSection() {
     case 'salat':     renderSalat(el);  break;
     case 'amal':      renderAmal(el);   break;
     case 'muhasabah': renderMuhasabah(el); break;
+    case 'gallery':   renderGallery(el);  break;
     case 'mizan':     renderMizan(el);  break;
     case 'mal':       renderMal(el);    break;
   }
@@ -4362,6 +4421,92 @@ async function loadAllMedia(allDates) {
     }
   }
   if(btn) { btn.textContent='✓ Media loaded'; btn.style.color='var(--green)'; btn.style.borderColor='var(--green)'; }
+}
+
+/* ════════════════════════════════════════════════
+   GALLERY — all photos & videos from every day
+════════════════════════════════════════════════ */
+let galleryLoaded = false;
+let _galleryItems = [];
+
+function renderGallery(el) {
+  const wrap = document.createElement('div');
+  wrap.className = 'gal-wrap';
+
+  // collect all media items from all days, newest first
+  const items = [];
+  Object.keys(DB.days).sort((a,b)=>b.localeCompare(a)).forEach(ds => {
+    const j = DB.days[ds]?.journal;
+    if(!j) return;
+    (j.images||[]).forEach(img => items.push({ date: ds, type:'image', driveId: img.driveId, name: img.name }));
+    (j.videos||[]).forEach(vid => items.push({ date: ds, type:'video', driveId: vid.driveId, name: vid.name }));
+  });
+  _galleryItems = items;
+
+  let h = `<div class="s-head">
+    <div class="s-kicker">Memories</div>
+    <div class="s-title">Gallery <span class="s-title-ar">معرض</span></div>
+    <div class="s-sub">${items.length} item${items.length===1?'':'s'} from all your entries</div>
+  </div>`;
+
+  if(!items.length) {
+    h += `<div class="tm-empty">
+      <div class="tm-empty-icon">🖼</div>
+      <div class="tm-empty-text">No photos or videos yet.<br>Anything you add to Sijjil entries will show up here.</div>
+    </div>`;
+    wrap.innerHTML = h;
+    el.appendChild(wrap);
+    return;
+  }
+
+  h += `<button id="gal-load-btn" class="gal-load-btn" onclick="loadGalleryMedia()">🖼 Load images</button>`;
+  h += `<div class="gal-grid" id="gal-grid">`;
+  items.forEach((it, i) => {
+    h += `<div class="gal-item" data-i="${i}" onclick="openJLightbox('${esc(it.driveId||'')}','${it.type}')">
+      <div class="gal-item-ph" id="gal-ph-${i}">${it.type==='video' ? '🎬' : '🖼'}</div>
+      ${it.type==='video' ? '<div class="gal-play">▶</div>' : ''}
+    </div>`;
+  });
+  h += `</div>`;
+
+  wrap.innerHTML = h;
+  el.appendChild(wrap);
+
+  // auto-load if already loaded once this session
+  if(galleryLoaded && gdriveToken) loadGalleryMedia(true);
+}
+
+async function loadGalleryMedia(silent=false) {
+  const btn = document.getElementById('gal-load-btn');
+  if(!gdriveToken) {
+    if(!silent) alert('Connect to Google Drive first.');
+    return;
+  }
+  if(btn) { btn.textContent = 'Loading…'; btn.disabled = true; }
+
+  await Promise.all(_galleryItems.map(async (it, i) => {
+    if(!it.driveId) return;
+    try {
+      const url = await getDriveMediaUrl(it.driveId);
+      if(!url) return;
+      const ph = document.getElementById(`gal-ph-${i}`);
+      if(!ph) return;
+      if(it.type === 'video') {
+        const vidEl = document.createElement('video');
+        vidEl.src = url; vidEl.muted = true; vidEl.preload = 'metadata';
+        vidEl.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block';
+        ph.replaceWith(vidEl);
+      } else {
+        const imgEl = document.createElement('img');
+        imgEl.src = url; imgEl.alt = it.name||''; imgEl.loading = 'lazy';
+        imgEl.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block';
+        ph.replaceWith(imgEl);
+      }
+    } catch(e) {}
+  }));
+
+  galleryLoaded = true;
+  if(btn) { btn.textContent = '✓ Loaded'; btn.style.color = 'var(--green)'; btn.style.borderColor = 'var(--green)'; }
 }
 
 function tmGoDay(dateStr) {
