@@ -3401,7 +3401,7 @@ async function obConnectDrive() {
     gdriveToken = await new Promise((res,rej) => {
       const cl = google.accounts.oauth2.initTokenClient({
         client_id: cid,
-        scope: 'https://www.googleapis.com/auth/drive',
+        scope: 'https://www.googleapis.com/auth/drive.file',
         callback: r => r.error ? rej(r.error) : res(r.access_token),
       });
       cl.requestAccessToken({prompt:''});
@@ -6372,7 +6372,7 @@ async function silentDriveAuth(interactive=false) {
     const tokenResponse = await new Promise((res,rej) => {
       const cl = google.accounts.oauth2.initTokenClient({
         client_id: DB.gdrive.clientId,
-        scope: 'https://www.googleapis.com/auth/drive',
+        scope: 'https://www.googleapis.com/auth/drive.file',
         callback: r => r.error ? rej(r.error) : res(r),
       });
       cl.requestAccessToken({prompt: interactive ? '' : 'none'});
