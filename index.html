@@ -3457,7 +3457,7 @@ function navigate(id) {
     fab.style.display = 'flex';
     fab.onclick = openMalSheet;
   } else {
-    fab.onclick = null;
+    fab.onclick = openFab;
     fab.style.display = (id==='niyyah'||id==='amal') ? 'flex' : 'none';
   }
 }
