@@ -65,3 +65,29 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
+// Tapping a notification focuses an already-open tab, or opens a new one.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientsArr) => {
+      const existing = clientsArr.find((c) => c.url.includes(self.location.origin));
+      if (existing) return existing.focus();
+      return self.clients.openWindow('./index.html');
+    })
+  );
+});
+
+// Listen for the page asking us to show a local reminder notification.
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SHOW_REMINDER') {
+    const { title, body } = event.data;
+    self.registration.showNotification(title || 'SaadOs', {
+      body: body || 'What are you doing right now?',
+      icon: './icon-192.png',
+      badge: './icon-192.png',
+      tag: 'saados-reminder',
+      renotify: true,
+    });
+  }
+});
