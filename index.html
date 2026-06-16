@@ -1551,7 +1551,7 @@ textarea.fi { resize: vertical; min-height: 80px; }
 /* ── Time Machine ── */
 .tm-wrap { padding-bottom: 32px; }
 
-.tm-month-block { margin-bottom: 40px; }
+.tm-month-block { margin-bottom: 28px; }
 
 .tm-month-label {
   font-size: 10px;
@@ -1559,45 +1559,34 @@ textarea.fi { resize: vertical; min-height: 80px; }
   text-transform: uppercase;
   color: var(--gold);
   font-weight: 600;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   display: flex; align-items: center; gap: 12px;
 }
 .tm-month-label::after {
   content: ''; flex: 1; height: 1px; background: var(--border);
 }
 
-/* horizontal scroll strip per month */
+/* square tile grid */
 .tm-strip {
-  display: flex;
-  gap: 12px;
-  overflow-x: auto;
-  padding-bottom: 8px;
-  scroll-snap-type: x mandatory;
-  -webkit-overflow-scrolling: touch;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
 }
-.tm-strip::-webkit-scrollbar { height: 3px; }
-.tm-strip::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
 
-/* individual day card */
+/* individual day tile — always square */
 .tm-card {
-  flex-shrink: 0;
-  width: 160px;
-  border-radius: var(--radius);
+  position: relative;
+  aspect-ratio: 1 / 1;
   overflow: hidden;
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
+  background: var(--surface2);
   cursor: pointer;
-  scroll-snap-align: start;
-  transition: transform 0.2s var(--ease), box-shadow 0.2s;
-  position: relative;
 }
-.tm-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
-.tm-card.is-today { box-shadow: 0 0 0 2px var(--gold), var(--shadow-sm); }
+.tm-card:hover .tm-card-img img { transform: scale(1.05); }
+.tm-card.is-today { box-shadow: inset 0 0 0 2px var(--gold); }
 
-/* photo area */
+/* photo area fills the whole tile */
 .tm-card-img {
-  width: 100%; height: 120px;
-  position: relative;
+  position: absolute; inset: 0;
   background: var(--surface2);
   overflow: hidden;
 }
@@ -1606,55 +1595,36 @@ textarea.fi { resize: vertical; min-height: 80px; }
   object-fit: cover; display: block;
   transition: transform 0.3s var(--ease);
 }
-.tm-card:hover .tm-card-img img { transform: scale(1.04); }
 .tm-card-img-count {
-  position: absolute; bottom: 6px; right: 6px;
-  background: rgba(10,9,8,0.65);
-  color: rgba(255,255,255,0.9);
+  position: absolute; top: 6px; right: 6px;
+  background: rgba(10,9,8,0.55);
+  color: rgba(255,255,255,0.92);
   font-size: 10px; font-weight: 500;
   padding: 2px 7px; border-radius: 20px;
   backdrop-filter: blur(4px);
+  z-index: 2;
 }
 .tm-card-img-placeholder {
   width: 100%; height: 100%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 28px; opacity: 0.15;
+  font-size: 22px; opacity: 0.18;
 }
 
-/* text area */
+/* date + snippet overlay, revealed via gradient at bottom of tile */
 .tm-card-body {
-  padding: 10px 12px 12px;
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 18px 8px 6px;
+  background: linear-gradient(to top, rgba(10,9,8,0.62), rgba(10,9,8,0));
+  z-index: 1;
 }
 .tm-card-date {
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--gold);
-  margin-bottom: 4px;
+  letter-spacing: 0.5px;
+  color: rgba(255,255,255,0.92);
 }
-.tm-card-snippet {
-  font-family: var(--serif);
-  font-size: 12px;
-  color: var(--text3);
-  line-height: 1.55;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.tm-card-tags {
-  display: flex; flex-wrap: wrap; gap: 3px;
-  margin-top: 6px;
-}
-.tm-card-tag {
-  font-size: 9px;
-  padding: 2px 6px;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  color: var(--text4);
-}
+.tm-card-snippet { display: none; }
+.tm-card-tags { display: none; }
 
 /* empty state */
 .tm-empty {
@@ -4606,12 +4576,9 @@ function renderTimeMachine(el) {
       const images = j.images || [];
       const videos = j.videos || [];
       const mediaCount = images.length + videos.length;
-      const text = j.text || j.free || '';
-      const tags = j.tags || [];
       const d = new Date(ds+'T12:00:00');
-      const dayLabel = d.toLocaleDateString('en-US',{weekday:'short', day:'numeric'});
+      const dayLabel = d.toLocaleDateString('en-US',{day:'numeric'});
       const isToday = ds === todayStr();
-      const snippet = text.trim().slice(0, 80) + (text.trim().length > 80 ? '…' : '');
 
       html += `<div class="tm-card ${isToday?'is-today':''}" onclick="tmGoDay('${ds}')">
         <div class="tm-card-img" id="tmc-${ds}">
@@ -4623,8 +4590,6 @@ function renderTimeMachine(el) {
         </div>
         <div class="tm-card-body">
           <div class="tm-card-date">${dayLabel}</div>
-          ${snippet ? `<div class="tm-card-snippet">${esc(snippet)}</div>` : ''}
-          ${tags.length ? `<div class="tm-card-tags">${tags.slice(0,3).map(t=>`<span class="tm-card-tag">${esc(t)}</span>`).join('')}</div>` : ''}
         </div>
       </div>`;
     });
