@@ -193,6 +193,7 @@ body {
   box-shadow: var(--shadow-sm);
 }
 .ob-primary:hover { background: var(--ink2); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.ob-primary:disabled { opacity: 0.6; cursor: default; transform: none; }
 .ob-ghost {
   display: block;
   margin: 12px auto 0;
@@ -2792,11 +2793,11 @@ canvas { width: 100%; display: block; }
     <span class="ob-logo-ar" style="font-family:var(--sans);font-size:18px;letter-spacing:2px">Your Personal OS</span>
     <div class="ob-desc">Your data lives entirely in your Google Drive — no servers, no accounts. Connect once and your journal syncs across every device automatically.</div>
 
-    <div class="ob-drive-box" id="ob-drive-box">
+    <div class="ob-drive-box" id="ob-drive-box" style="background:none;border:none;box-shadow:none;padding:0;text-align:center">
       <button class="ob-primary" id="ob-connect-btn" onclick="obConnectDrive()">
         Log in with Google
       </button>
-      <div id="ob-drive-status" style="min-height:20px;margin-top:12px;font-size:13px;color:var(--gold);text-align:center"></div>
+      <div id="ob-drive-status" style="min-height:20px;margin-top:16px;font-size:13px;color:var(--gold);text-align:center"></div>
     </div>
   </div>
 </div>
@@ -3392,16 +3393,21 @@ async function obConnectDrive() {
   localStorage.setItem('raqib_logged_in', '1');
   try {
     await loadGIS();
-    gdriveToken = await new Promise((res,rej) => {
+    const tokenResponse = await new Promise((res,rej) => {
       const cl = google.accounts.oauth2.initTokenClient({
         client_id: cid,
         scope: 'https://www.googleapis.com/auth/drive.file',
-        callback: r => r.error ? rej(r.error) : res(r.access_token),
+        callback: r => r.error ? rej(r.error) : res(r),
       });
       cl.requestAccessToken({prompt:''});
     });
+    gdriveToken = tokenResponse.access_token;
+    const expiresIn = tokenResponse.expires_in ? parseInt(tokenResponse.expires_in) : 3600;
+    gdriveTokenExpiry = Date.now() + expiresIn * 1000;
     DB.gdrive.connected = true;
     localStorage.setItem('raqib_logged_in', '1');
+    localStorage.setItem('raqib_token', gdriveToken);
+    localStorage.setItem('raqib_token_expiry', String(gdriveTokenExpiry));
     setTimeout(() => silentDriveAuth(false), 55 * 60 * 1000);
 
     status.textContent = 'Connected! Checking Drive for your data…';
@@ -3434,6 +3440,8 @@ async function obConnectDrive() {
     status.textContent = 'Could not connect: ' + e;
     gdriveToken = null; DB.gdrive.connected = false;
     localStorage.removeItem('raqib_logged_in');
+    localStorage.removeItem('raqib_token');
+    localStorage.removeItem('raqib_token_expiry');
   }
 }
 function applyTheme(t) { document.documentElement.setAttribute('data-theme',t); }
@@ -5170,10 +5178,16 @@ async function _driveGet(url) {
     if(gdriveToken) {
       // Retry the original request with the new token
       const r2 = await fetch(url, { headers:{ Authorization:'Bearer '+gdriveToken } });
-      if(r2.status===401) { gdriveToken=null; DB.gdrive.connected=false; setSyncState('offline'); throw new Error('Token expired'); }
+      if(r2.status===401) {
+        gdriveToken=null; DB.gdrive.connected=false; setSyncState('offline');
+        localStorage.removeItem('raqib_token'); localStorage.removeItem('raqib_token_expiry');
+        throw new Error('Token expired');
+      }
       return r2;
     }
-    gdriveToken=null; DB.gdrive.connected=false; setSyncState('offline'); throw new Error('Token expired');
+    gdriveToken=null; DB.gdrive.connected=false; setSyncState('offline');
+    localStorage.removeItem('raqib_token'); localStorage.removeItem('raqib_token_expiry');
+    throw new Error('Token expired');
   }
   return r;
 }
@@ -5448,6 +5462,8 @@ function driveDisconnect() {
   Object.keys(_dayImgFolderCache).forEach(k=>delete _dayImgFolderCache[k]);
   driveReady = false;
   localStorage.removeItem('raqib_logged_in');
+  localStorage.removeItem('raqib_token');
+  localStorage.removeItem('raqib_token_expiry');
   sessionStorage.removeItem('raqib_fid');
   sessionStorage.removeItem('raqib_imgfid');
   if(syncDebounce) clearTimeout(syncDebounce);
@@ -6376,6 +6392,8 @@ async function silentDriveAuth(interactive=false) {
     gdriveTokenExpiry = Date.now() + expiresIn * 1000;
     DB.gdrive.connected = true;
     localStorage.setItem('raqib_logged_in', '1');
+    localStorage.setItem('raqib_token', gdriveToken);
+    localStorage.setItem('raqib_token_expiry', String(gdriveTokenExpiry));
     // Schedule proactive token refresh at 55 min (well before 1h expiry)
     setTimeout(() => silentDriveAuth(false), 55 * 60 * 1000);
   } catch(e) {
@@ -6427,7 +6445,17 @@ function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
       </div>
       <style>@keyframes boot-spin{to{transform:rotate(360deg)}}</style>`;
 
-    await silentDriveAuth(false);
+    // Reuse the cached access token directly if it hasn't expired yet — no Google round-trip needed
+    const cachedToken = localStorage.getItem('raqib_token');
+    const cachedExpiry = parseInt(localStorage.getItem('raqib_token_expiry')||'0');
+    if(cachedToken && Date.now() < cachedExpiry - 2*60*1000) {
+      gdriveToken = cachedToken;
+      gdriveTokenExpiry = cachedExpiry;
+      DB.gdrive.connected = true;
+      setTimeout(() => silentDriveAuth(false), cachedExpiry - Date.now() - 5*60*1000);
+    } else {
+      await silentDriveAuth(false);
+    }
 
     if(gdriveToken) {
       const bm = document.getElementById('boot-msg');
