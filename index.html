@@ -2793,16 +2793,9 @@ canvas { width: 100%; display: block; }
     <div class="ob-desc">Your data lives entirely in your Google Drive — no servers, no accounts. Connect once and your journal syncs across every device automatically.</div>
 
     <div class="ob-drive-box" id="ob-drive-box">
-      <div class="ob-drive-label">OAuth Client ID</div>
-      <input type="text" class="ob-field" id="ob-cid"
-        placeholder="…apps.googleusercontent.com"
-        style="font-size:14px;font-family:var(--sans);margin-bottom:16px" />
       <button class="ob-primary" id="ob-connect-btn" onclick="obConnectDrive()">
-        Connect Google Drive
+        Log in with Google
       </button>
-      <div class="ob-drive-hint">
-        <a href="https://console.cloud.google.com" target="_blank">Get a Client ID from Google Cloud Console →</a>
-      </div>
       <div id="ob-drive-status" style="min-height:20px;margin-top:12px;font-size:13px;color:var(--gold);text-align:center"></div>
     </div>
   </div>
@@ -2993,10 +2986,11 @@ const COLORS = ['#b8881c','#2d5a3d','#2a4a6b','#5a3a7a','#8b3a2a','#3a6e8f','#7a
 /* ════════════════════════════════════════════════
    STATE
 ════════════════════════════════════════════════ */
+const HARDCODED_CID = '111426887413-md2gvq2djc7p7qqgp57p5v0s1eichp8b.apps.googleusercontent.com';
 let DB = {
   profile: { name:'', theme:'light', fontSize:'medium' },
   days: {}, practices: [], wird: JSON.parse(JSON.stringify(DEFAULT_WIRD)),
-  gdrive: { connected:false, clientId:'111426887413-md2gvq2djc7p7qqgp57p5v0s1eichp8b.apps.googleusercontent.com', lastSync:null },
+  gdrive: { connected:false, clientId:HARDCODED_CID, lastSync:null },
   onboarded: false,
   mal: { budget: 0, months: {} },
 };
@@ -3389,14 +3383,13 @@ function applyTheme(t) { document.documentElement.setAttribute('data-theme',t); 
    ONBOARDING — Drive connect only
 ════════════════════════════════════════════════ */
 async function obConnectDrive() {
-  const cid = document.getElementById('ob-cid')?.value.trim();
-  if(!cid) { document.getElementById('ob-drive-status').textContent = 'Please enter your Client ID.'; return; }
+  const cid = HARDCODED_CID;
   const btn = document.getElementById('ob-connect-btn');
   const status = document.getElementById('ob-drive-status');
   btn.textContent = 'Connecting…'; btn.disabled = true;
   status.textContent = 'Authorising with Google…';
   DB.gdrive.clientId = cid;
-  sessionStorage.setItem('raqib_cid', cid);
+  localStorage.setItem('raqib_logged_in', '1');
   try {
     await loadGIS();
     gdriveToken = await new Promise((res,rej) => {
@@ -3408,7 +3401,7 @@ async function obConnectDrive() {
       cl.requestAccessToken({prompt:''});
     });
     DB.gdrive.connected = true;
-    sessionStorage.setItem('raqib_cid', cid);
+    localStorage.setItem('raqib_logged_in', '1');
     setTimeout(() => silentDriveAuth(false), 55 * 60 * 1000);
 
     status.textContent = 'Connected! Checking Drive for your data…';
@@ -3437,9 +3430,10 @@ async function obConnectDrive() {
       setSyncState('ok');
     }, 600);
   } catch(e) {
-    btn.textContent = 'Connect Google Drive'; btn.disabled = false;
+    btn.textContent = 'Log in with Google'; btn.disabled = false;
     status.textContent = 'Could not connect: ' + e;
     gdriveToken = null; DB.gdrive.connected = false;
+    localStorage.removeItem('raqib_logged_in');
   }
 }
 function applyTheme(t) { document.documentElement.setAttribute('data-theme',t); }
@@ -5294,7 +5288,7 @@ async function pushProfile() {
   await _upsertJsonFile('profile.json', rootId, {
     _meta:{ version:3, app:'saados', savedAt:new Date().toISOString() },
     profile:DB.profile, practices:DB.practices, wird:DB.wird,
-    onboarded:DB.onboarded, gdrive:{ clientId:DB.gdrive.clientId, lastSync:DB.gdrive.lastSync },
+    onboarded:DB.onboarded, gdrive:{ lastSync:DB.gdrive.lastSync },
   }, existingId);
 }
 
@@ -5453,11 +5447,16 @@ function driveDisconnect() {
   Object.keys(_dayFolderCache).forEach(k=>delete _dayFolderCache[k]);
   Object.keys(_dayImgFolderCache).forEach(k=>delete _dayImgFolderCache[k]);
   driveReady = false;
-  sessionStorage.removeItem('raqib_cid');
+  localStorage.removeItem('raqib_logged_in');
   sessionStorage.removeItem('raqib_fid');
   sessionStorage.removeItem('raqib_imgfid');
   if(syncDebounce) clearTimeout(syncDebounce);
-  setSyncState('offline'); openSettings();
+  setSyncState('offline'); closeSettings();
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('onboarding').style.display = '';
+  document.getElementById('ob-drive-status').textContent = '';
+  const btn = document.getElementById('ob-connect-btn');
+  if(btn){ btn.textContent='Log in with Google'; btn.disabled=false; }
 }
 
 /* ════════════════════════════════════════════════
@@ -6298,13 +6297,7 @@ function openSettings() {
           : 'Not connected — data is not being saved'}
       </div>
       ${!syn ? `
-      <div class="fg"><label class="fl">OAuth Client ID</label>
-        <input type="text" class="fi" id="gdcid" value="${esc(DB.gdrive.clientId||'')}" placeholder="…apps.googleusercontent.com" />
-        <div style="font-size:11px;color:var(--ink4);margin-top:4px">
-          <a href="https://console.cloud.google.com" target="_blank" style="color:var(--gold)">Get from Google Cloud Console →</a>
-        </div>
-      </div>
-      <button class="s-btn" onclick="driveConnect()">Connect Drive</button>` : `
+      <button class="s-btn" onclick="driveConnect()">Log in with Google</button>` : `
       <div style="font-size:12px;color:var(--ink3);margin-bottom:10px;line-height:1.6">
         Every change syncs automatically within 1–2 seconds. Your data lives only in Drive.
       </div>
@@ -6319,7 +6312,8 @@ function setTheme(t) {
   document.querySelectorAll('.th-btn').forEach(b=>b.classList.toggle('sel',b.dataset.t===t));
 }
 function exportData() {
-  const b=new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
+  const { gdrive, ...exportable } = DB;
+  const b=new Blob([JSON.stringify({...exportable, gdrive:{connected:gdrive.connected,lastSync:gdrive.lastSync}},null,2)],{type:'application/json'});
   const u=URL.createObjectURL(b);
   const a=document.createElement('a'); a.href=u; a.download='saados-data.json'; a.click(); URL.revokeObjectURL(u);
 }
@@ -6353,12 +6347,10 @@ function clearData() {
 function updateSyncUI() { setSyncState(DB.gdrive.connected ? 'ok' : 'offline'); }
 
 async function driveConnect() {
-  const cid = document.getElementById('gdcid')?.value.trim();
-  if(!cid){ alert('Enter your OAuth Client ID'); return; }
-  DB.gdrive.clientId = cid;
-  sessionStorage.setItem('raqib_cid', cid);
+  DB.gdrive.clientId = HARDCODED_CID;
   await silentDriveAuth(true);
   if(!gdriveToken) return;
+  localStorage.setItem('raqib_logged_in', '1');
   closeSettings();
   const loaded = await drivePull(true);
   driveReady = true; // safe to write from now on regardless
@@ -6383,7 +6375,7 @@ async function silentDriveAuth(interactive=false) {
     const expiresIn = tokenResponse.expires_in ? parseInt(tokenResponse.expires_in) : 3600;
     gdriveTokenExpiry = Date.now() + expiresIn * 1000;
     DB.gdrive.connected = true;
-    sessionStorage.setItem('raqib_cid', DB.gdrive.clientId);
+    localStorage.setItem('raqib_logged_in', '1');
     // Schedule proactive token refresh at 55 min (well before 1h expiry)
     setTimeout(() => silentDriveAuth(false), 55 * 60 * 1000);
   } catch(e) {
@@ -6421,11 +6413,10 @@ function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
    BOOT — read-only until Drive pull succeeds
 ════════════════════════════════════════════════ */
 (async function boot() {
-  const HARDCODED_CID = '111426887413-md2gvq2djc7p7qqgp57p5v0s1eichp8b.apps.googleusercontent.com';
-  const storedCid = sessionStorage.getItem('raqib_cid') || HARDCODED_CID;
-  DB.gdrive.clientId = storedCid;
+  DB.gdrive.clientId = HARDCODED_CID;
+  const wasLoggedIn = localStorage.getItem('raqib_logged_in') === '1';
 
-  if(DB.gdrive.clientId) {
+  if(wasLoggedIn) {
     document.getElementById('onboarding').style.display = 'none';
     document.getElementById('app').classList.add('visible');
     document.getElementById('fab').style.display = 'none';
@@ -6452,14 +6443,16 @@ function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
       return;
     }
 
+    // Silent refresh failed (e.g. Google session expired) — show centered login screen again
     document.getElementById('app').classList.remove('visible');
     document.getElementById('onboarding').style.display = '';
-    const cidInput = document.getElementById('ob-cid');
-    if(cidInput) cidInput.value = storedCid;
-    document.getElementById('ob-drive-status').textContent = 'Please re-authorise to load your data.';
+    document.getElementById('ob-drive-status').textContent = 'Session expired — please log in again.';
     return;
   }
 
+  // Not logged in yet — show centered login screen
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('onboarding').style.display = '';
   document.getElementById('fab').style.display = 'none';
   setSyncState('offline');
 })();
