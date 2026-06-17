@@ -2964,13 +2964,27 @@ const DEFAULT_WIRD = [
 ];
 const EMOJIS = ['📖','🌙','🤲','🏃','💪','🧘','📝','🌿','❤️','⭐','🎯','💡','🌸','🔑','☀️','🌊','🎨','🍵','🌱','💎','🕌','🌟','📿','✨'];
 const COLORS = ['#b8881c','#2d5a3d','#2a4a6b','#5a3a7a','#8b3a2a','#3a6e8f','#7a5020','#7a8a3a','#4a6a8f','#3a8a6a'];
+const TIMEZONES = [
+  { id:'Africa/Casablanca', label:'Casablanca (Morocco)' },
+  { id:'Africa/Cairo',      label:'Cairo' },
+  { id:'Asia/Riyadh',       label:'Riyadh' },
+  { id:'Asia/Dubai',        label:'Dubai' },
+  { id:'Asia/Istanbul',     label:'Istanbul' },
+  { id:'Asia/Karachi',      label:'Karachi' },
+  { id:'Asia/Jakarta',      label:'Jakarta' },
+  { id:'Europe/London',     label:'London' },
+  { id:'Europe/Paris',      label:'Paris' },
+  { id:'America/New_York',  label:'New York' },
+  { id:'America/Los_Angeles', label:'Los Angeles' },
+  { id:'UTC',               label:'UTC' },
+];
 
 /* ════════════════════════════════════════════════
    STATE
 ════════════════════════════════════════════════ */
 const HARDCODED_CID = '111426887413-md2gvq2djc7p7qqgp57p5v0s1eichp8b.apps.googleusercontent.com';
 let DB = {
-  profile: { name:'', theme:'light', fontSize:'medium' },
+  profile: { name:'', theme:'light', fontSize:'medium', timezone:'Africa/Casablanca' },
   days: {}, practices: [], wird: JSON.parse(JSON.stringify(DEFAULT_WIRD)),
   gdrive: { connected:false, clientId:HARDCODED_CID, lastSync:null },
   onboarded: false,
@@ -3339,6 +3353,17 @@ function focusSaveTime() {
    DATE
 ════════════════════════════════════════════════ */
 function todayStr() { return new Date().toISOString().split('T')[0]; }
+function getTimezone() { return DB.profile.timezone || 'Africa/Casablanca'; }
+function getCurrentTimeStr() {
+  try {
+    return new Date().toLocaleTimeString('en-GB', {
+      timeZone: getTimezone(), hour:'2-digit', minute:'2-digit', hour12:false
+    });
+  } catch(e) {
+    // Fallback if timezone string is somehow invalid
+    return new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', hour12:false });
+  }
+}
 function shiftDay(n) {
   const d = new Date(currentDate+'T12:00:00');
   d.setDate(d.getDate()+n);
@@ -4460,6 +4485,7 @@ function renderSijjilWrite(el, dateLabel) {
     <div class="sj-body-wrap">
       <textarea class="sj-ta" id="sj-ta" rows="10"
         oninput="sjSave(this.value)"
+        onkeydown="sjHandleKeydown(event)"
         placeholder="What happened today…">${esc(j.text||'')}</textarea>
       <div class="sj-word-count" id="sj-wc">${wordCount} words</div>
     </div>
@@ -4872,6 +4898,27 @@ function sjSave(v) {
   const ta = document.getElementById('sj-ta');
   if(ta) { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
   markUnsaved();
+}
+
+// Auto-inserts a "HH:MM : " timestamp at the start of every new line when the
+// user presses Enter, using the timezone selected in Settings (default
+// Africa/Casablanca). Lets people jot timestamped thoughts through the day
+// without typing the time themselves. Existing text is never touched —
+// this only affects new lines created from now on.
+function sjHandleKeydown(e) {
+  if(e.key !== 'Enter') return;
+  e.preventDefault();
+  const ta = e.target;
+  const start = ta.selectionStart;
+  const end = ta.selectionEnd;
+  const stamp = getCurrentTimeStr() + ' : ';
+  const before = ta.value.slice(0, start);
+  const after = ta.value.slice(end);
+  const insert = '\n' + stamp;
+  ta.value = before + insert + after;
+  const newPos = start + insert.length;
+  ta.selectionStart = ta.selectionEnd = newPos;
+  sjSave(ta.value);
 }
 
 function sjTagKD(e) {
@@ -6281,6 +6328,12 @@ function openSettings() {
       <div class="fg"><label class="fl">Your name</label>
         <input type="text" class="fi" id="sname" value="${esc(DB.profile.name||'')}" placeholder="Your name"
           onchange="DB.profile.name=this.value;markUnsaved()" /></div>
+      <div class="fg"><label class="fl">Timezone</label>
+        <select class="fi" id="stimezone" onchange="DB.profile.timezone=this.value;markUnsaved()">
+          ${TIMEZONES.map(tz=>`<option value="${tz.id}" ${getTimezone()===tz.id?'selected':''}>${esc(tz.label)}</option>`).join('')}
+        </select>
+        <div style="font-size:11px;color:var(--ink4);margin-top:6px">Used for the time stamps in Sijjil entries.</div>
+      </div>
     </div>
     <div class="s-section">
       <div class="s-section-title">Data</div>
@@ -6356,7 +6409,7 @@ function doImport(e) {
 function clearData() {
   if(!confirm('Delete ALL data?')) return;
   if(!confirm('This cannot be undone. Continue?')) return;
-  DB={profile:{name:'',theme:'light'},days:{},practices:[],wird:JSON.parse(JSON.stringify(DEFAULT_WIRD)),gdrive:{connected:DB.gdrive.connected,clientId:DB.gdrive.clientId,lastSync:null},onboarded:true,mal:{budget:0,months:{}}};
+  DB={profile:{name:'',theme:'light',timezone:'Africa/Casablanca'},days:{},practices:[],wird:JSON.parse(JSON.stringify(DEFAULT_WIRD)),gdrive:{connected:DB.gdrive.connected,clientId:DB.gdrive.clientId,lastSync:null},onboarded:true,mal:{budget:0,months:{}}};
   closeSettings(); renderSection();
   markUnsaved(); // push cleared state to Drive
 }
