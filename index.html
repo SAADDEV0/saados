@@ -6352,7 +6352,6 @@ function openSettings() {
       <button class="s-btn" onclick="exportData()">⬇ Download Data</button>
       <button class="s-btn" onclick="importData()">⬆ Import JSON</button>
       <input type="file" id="s-import" accept=".json" style="display:none" onchange="doImport(event)" />
-      <button class="s-btn danger" onclick="clearData()">⚠ Clear all data</button>
     </div>
     <div class="s-section">
       <div class="s-section-title">Google Drive</div>
@@ -6421,35 +6420,43 @@ async function exportData() {
       const vidFolder = zip.folder('Videos');
       const days = exportJson.days || {};
       const dateKeys = Object.keys(days);
-      let done = 0, total = 0;
-      for(const ds of dateKeys) {
-        const j = days[ds]?.journal;
-        if(j?.images?.length) total += j.images.length;
-        if(j?.videos?.length) total += j.videos.length;
-      }
 
+      // Flatten every image/video into one task list so we can fetch them
+      // concurrently instead of one network round-trip at a time.
+      const tasks = [];
       for(const ds of dateKeys) {
         const j = days[ds]?.journal;
         if(!j) continue;
-
         for(const img of (j.images || [])) {
-          if(btn) btn.textContent = `⬇ Downloading media… (${++done}/${total||1})`;
           if(!img.driveId) continue;
-          const blob = await _driveGetBlob(img.driveId);
-          if(!blob) continue;
           const safeName = (img.name || `${img.driveId}.jpg`).replace(/[\\/:*?"<>|]/g, '_');
-          imgFolder.file(`${ds}_${safeName}`, blob);
+          tasks.push({ driveId: img.driveId, folder: imgFolder, filename: `${ds}_${safeName}` });
         }
-
         for(const vid of (j.videos || [])) {
-          if(btn) btn.textContent = `⬇ Downloading media… (${++done}/${total||1})`;
           if(!vid.driveId) continue;
-          const blob = await _driveGetBlob(vid.driveId);
-          if(!blob) continue;
           const safeName = (vid.name || `${vid.driveId}.mp4`).replace(/[\\/:*?"<>|]/g, '_');
-          vidFolder.file(`${ds}_${safeName}`, blob);
+          tasks.push({ driveId: vid.driveId, folder: vidFolder, filename: `${ds}_${safeName}` });
         }
       }
+
+      const total = tasks.length;
+      let done = 0;
+      if(btn && total) btn.textContent = `⬇ Downloading media… (0/${total})`;
+
+      // Concurrency pool: several requests in flight at once (much faster than
+      // sequential), but capped so we don't flood Drive's API and trigger rate limits.
+      const CONCURRENCY = 6;
+      let nextIndex = 0;
+      async function worker() {
+        while(nextIndex < tasks.length) {
+          const task = tasks[nextIndex++];
+          const blob = await _driveGetBlob(task.driveId);
+          if(blob) task.folder.file(task.filename, blob);
+          done++;
+          if(btn) btn.textContent = `⬇ Downloading media… (${done}/${total})`;
+        }
+      }
+      await Promise.all(Array.from({length: Math.min(CONCURRENCY, tasks.length)}, worker));
     }
 
     if(btn) btn.textContent = '⬇ Zipping…';
@@ -6479,13 +6486,6 @@ function doImport(e) {
     }catch(e){alert('Invalid file.');}
   };
   r.readAsText(f);
-}
-function clearData() {
-  if(!confirm('Delete ALL data?')) return;
-  if(!confirm('This cannot be undone. Continue?')) return;
-  DB={profile:{name:'',theme:'light',timezone:'Africa/Casablanca'},days:{},practices:[],wird:JSON.parse(JSON.stringify(DEFAULT_WIRD)),gdrive:{connected:DB.gdrive.connected,clientId:DB.gdrive.clientId,lastSync:null},onboarded:true,mal:{budget:0,months:{}}};
-  closeSettings(); renderSection();
-  markUnsaved(); // push cleared state to Drive
 }
 
 /* ════════════════════════════════════════════════
