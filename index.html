@@ -3086,6 +3086,40 @@ let syncState = 'idle'; // 'idle' | 'syncing' | 'ok' | 'error' | 'offline'
 let driveReady = false; // true only after successful pull or confirmed new account — blocks any push before that
 
 /* ════════════════════════════════════════════════
+   LOCAL PERSISTENCE (instant, always-on safety net)
+   DB is saved to localStorage synchronously on every
+   change, BEFORE/REGARDLESS of any Drive sync. Drive
+   remains the cross-device backup/sync layer, but the
+   device itself is never the single point of failure.
+════════════════════════════════════════════════ */
+const LOCAL_DB_KEY = 'saados_db';
+
+function saveLocalDB() {
+  try {
+    localStorage.setItem(LOCAL_DB_KEY, JSON.stringify(DB));
+    return true;
+  } catch (e) {
+    // Quota exceeded, private browsing, etc. — don't crash the app.
+    console.error('Local save failed:', e.message);
+    return false;
+  }
+}
+
+function loadLocalDB() {
+  try {
+    const raw = localStorage.getItem(LOCAL_DB_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return false;
+    DB = parsed;
+    return true;
+  } catch (e) {
+    console.error('Local load failed:', e.message);
+    return false;
+  }
+}
+
+/* ════════════════════════════════════════════════
    SYNC STATE UI
 ════════════════════════════════════════════════ */
 function setSyncState(s, detail) {
@@ -3110,6 +3144,12 @@ function setSyncState(s, detail) {
    MARK CHANGED → DEBOUNCED DRIVE PUSH
 ════════════════════════════════════════════════ */
 function markUnsaved() {
+  // ── LOCAL SAVE FIRST — always, regardless of Drive state ──
+  // This is the safety net: even if Drive is offline, not yet
+  // connected, mid-auth, or fails entirely, the change is never
+  // lost — it's already on disk on this device.
+  saveLocalDB();
+
   if(!driveReady) return;
   if(!DB.gdrive.connected) { setSyncState('offline'); return; }
   markDayDirty(currentDate);
@@ -5430,8 +5470,22 @@ async function pushProfile() {
   }, existingId);
 }
 
+const PENDING_DAYS_KEY = 'saados_pending_days';
 let _pendingDays = new Set();
-function markDayDirty(d) { _pendingDays.add(d||currentDate); }
+function markDayDirty(d) {
+  _pendingDays.add(d||currentDate);
+  try { localStorage.setItem(PENDING_DAYS_KEY, JSON.stringify([..._pendingDays])); } catch(e) {}
+}
+function clearPendingDays() {
+  _pendingDays.clear();
+  try { localStorage.removeItem(PENDING_DAYS_KEY); } catch(e) {}
+}
+function loadPendingDays() {
+  try {
+    const raw = localStorage.getItem(PENDING_DAYS_KEY);
+    if(raw) _pendingDays = new Set(JSON.parse(raw));
+  } catch(e) {}
+}
 
 async function drivePush() {
   if(!gdriveToken) throw new Error('No token');
@@ -5447,6 +5501,7 @@ async function drivePush() {
     });
   }
   _pendingDays.clear();
+  try { localStorage.removeItem(PENDING_DAYS_KEY); } catch(e) {}
   DB.gdrive.lastSync = new Date().toISOString();
 }
 
@@ -5534,9 +5589,13 @@ async function drivePull(silent=false) {
     }
 
     // ── 4. Apply day data ─────────────────────────────────────────────────
+    // Skip any day that still has unsynced local changes pending push —
+    // otherwise a stale remote copy could silently overwrite a prayer/task
+    // you just logged on this device before it had a chance to sync out.
     for(const result of dayDataResults) {
       if(!result) continue;
       const { dateStr, parentId, dd } = result;
+      if(_pendingDays.has(dateStr)) { _dayFolderCache[dateStr] = parentId; continue; }
       DB.days[dateStr] = {
         niyyah:dd.niyyah||'', tasks:dd.tasks||[], prayers:dd.prayers||{},
         wirdCounts:dd.wirdCounts||{}, practicesDone:dd.practicesDone||{},
@@ -6827,16 +6886,33 @@ function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
   DB.gdrive.clientId = HARDCODED_CID;
   const wasLoggedIn = localStorage.getItem('raqib_logged_in') === '1';
 
+  // ── LOCAL-FIRST LOAD ──
+  // Load whatever's on this device immediately so the app is usable
+  // right away, even fully offline. Drive is layered on top after,
+  // never a blocking dependency for opening the app or seeing today's data.
+  const hadLocal = loadLocalDB();
+  loadPendingDays();
+
   if(wasLoggedIn) {
-    document.getElementById('onboarding').style.display = 'none';
-    document.getElementById('app').classList.add('visible');
-    document.getElementById('fab').style.display = 'none';
-    document.getElementById('section-content').innerHTML =
-      `<div id="boot-msg" style="text-align:center;padding:80px 20px;color:var(--text3);font-family:var(--serif);font-style:italic;font-size:18px">
-        <div style="margin-bottom:20px">Connecting to Drive…</div>
-        <div style="width:40px;height:40px;margin:0 auto;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:boot-spin 0.8s linear infinite"></div>
-      </div>
-      <style>@keyframes boot-spin{to{transform:rotate(360deg)}}</style>`;
+    if(hadLocal) {
+      // We have local data — show the real app right away, sync quietly in background.
+      document.getElementById('onboarding').style.display = 'none';
+      document.getElementById('app').classList.add('visible');
+      init();
+      setSyncState('syncing');
+    } else {
+      // First load on this device with no local cache yet — show the boot spinner
+      // since there is genuinely nothing to render until Drive responds.
+      document.getElementById('onboarding').style.display = 'none';
+      document.getElementById('app').classList.add('visible');
+      document.getElementById('fab').style.display = 'none';
+      document.getElementById('section-content').innerHTML =
+        `<div id="boot-msg" style="text-align:center;padding:80px 20px;color:var(--text3);font-family:var(--serif);font-style:italic;font-size:18px">
+          <div style="margin-bottom:20px">Connecting to Drive…</div>
+          <div style="width:40px;height:40px;margin:0 auto;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:boot-spin 0.8s linear infinite"></div>
+        </div>
+        <style>@keyframes boot-spin{to{transform:rotate(360deg)}}</style>`;
+    }
 
     // Reuse the cached access token directly if it hasn't expired yet — no Google round-trip needed
     const cachedToken = localStorage.getItem('raqib_token');
@@ -6851,16 +6927,26 @@ function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
     }
 
     if(gdriveToken) {
-      const bm = document.getElementById('boot-msg');
-      if(bm) bm.querySelector('div').textContent = 'Loading your data…';
+      if(!hadLocal) {
+        const bm = document.getElementById('boot-msg');
+        if(bm) bm.querySelector('div').textContent = 'Loading your data…';
+      }
       // Try migration from old flat file first
       const migrated = await migrateOldData();
       if(!migrated) {
         const loaded = await drivePull(true);
-        if(!loaded) { DB.onboarded = true; }
+        if(!loaded && !hadLocal) { DB.onboarded = true; }
       }
       driveReady = true;
+      saveLocalDB(); // persist whatever Drive merged in (pending days were preserved, see drivePull)
       init(); setSyncState('ok');
+      return;
+    }
+
+    if(hadLocal) {
+      // Couldn't reach Drive, but local data is already showing — just flag it and carry on offline.
+      driveReady = false;
+      setSyncState('offline');
       return;
     }
 
