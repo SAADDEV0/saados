@@ -7039,46 +7039,46 @@ function aiValidatePatch(patch) {
   }
 
   for (const key of Object.keys(patch)) {
-    // Only allowed top-level keys
     if (!AI_ALLOWED_KEYS.has(key)) {
       return `Unknown top-level key: "${key}"`;
     }
 
-    // Validate days patch
     if (key === 'days') {
       const days = patch.days;
       if (typeof days !== 'object' || Array.isArray(days)) return 'days must be an object';
       for (const dateKey of Object.keys(days)) {
-        // Date key format: YYYY-MM-DD
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
-          return `Invalid date key: "${dateKey}"`;
-        }
-        // Reject future dates
-        if (dateKey > todayStr()) {
-          return `Rejected future date: "${dateKey}"`;
-        }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return `Invalid date key: "${dateKey}"`;
+        if (dateKey > todayStr()) return `Rejected future date: "${dateKey}"`;
         const dayPatch = days[dateKey];
         if (typeof dayPatch !== 'object' || Array.isArray(dayPatch)) return 'day entry must be an object';
         for (const dk of Object.keys(dayPatch)) {
           if (!AI_DAY_KEYS.has(dk)) return `Unknown day key: "${dk}"`;
         }
-        // Validate prayers sub-keys
+        // Validate prayers
         if (dayPatch.prayers) {
           for (const pid of Object.keys(dayPatch.prayers)) {
             if (!PRAYER_IDS.has(pid)) return `Unknown prayer id: "${pid}"`;
             const pr = dayPatch.prayers[pid];
-            if (pr.location && !['mosque', 'home', 'not_yet'].includes(pr.location)) {
-              return `Invalid prayer location: "${pr.location}"`;
-            }
-            if (pr.timing && !['on_time', 'late', 'not_yet'].includes(pr.timing)) {
-              return `Invalid prayer timing: "${pr.timing}"`;
-            }
+            if (pr.location && !['mosque', 'home', 'not_yet'].includes(pr.location)) return `Invalid prayer location: "${pr.location}"`;
+            if (pr.timing  && !['on_time', 'late', 'not_yet'].includes(pr.timing))   return `Invalid prayer timing: "${pr.timing}"`;
           }
+        }
+        // Validate tasks array
+        if (dayPatch.tasks !== undefined) {
+          if (!Array.isArray(dayPatch.tasks)) return 'tasks must be an array';
+          for (const t of dayPatch.tasks) {
+            if (typeof t !== 'object' || !t.name) return 'each task must have a name';
+            if (t.block && !PRAYER_IDS.has(t.block)) return `Invalid task block: "${t.block}"`;
+          }
+        }
+        // Validate journal
+        if (dayPatch.journal !== undefined) {
+          if (typeof dayPatch.journal !== 'object') return 'journal must be an object';
+          if (dayPatch.journal.images !== undefined && !Array.isArray(dayPatch.journal.images)) return 'journal.images must be an array';
         }
       }
     }
 
-    // Validate mal patch
     if (key === 'mal') {
       const mal = patch.mal;
       if (typeof mal !== 'object' || Array.isArray(mal)) return 'mal must be an object';
@@ -7086,13 +7086,11 @@ function aiValidatePatch(patch) {
       for (const mk of Object.keys(mal)) {
         if (!malKeys.has(mk)) return `Unknown mal key: "${mk}"`;
       }
-      if (mal.expenses !== undefined && !Array.isArray(mal.expenses)) {
-        return 'mal.expenses must be an array';
-      }
+      if (mal.expenses !== undefined && !Array.isArray(mal.expenses)) return 'mal.expenses must be an array';
     }
   }
 
-  return null; // null = valid
+  return null;
 }
 
 // ── Build a lean DB snapshot for the prompt ──
@@ -7100,7 +7098,6 @@ function aiBuildContext() {
   const today = todayStr();
   const day = DB.days[today] || {};
 
-  // Only send today's day data + mal to keep token count small
   return {
     today: today,
     currentSection: currentSection,
@@ -7108,14 +7105,37 @@ function aiBuildContext() {
       niyyah: day.niyyah || '',
       prayers: day.prayers || {},
       nawafil: day.nawafil || [],
-      tasks: (day.tasks || []).map(t => ({ id: t.id, name: t.name, block: t.block, done: t.done })),
-      journal: { text: day.journal?.text || '', tags: day.journal?.tags || [] },
+      tasks: (day.tasks || []).map(t => ({
+        id: t.id,
+        name: t.name,
+        block: t.block,
+        note: t.note || '',
+        duration: t.duration || null,
+        pomSessions: t.pomSessions || 4,
+        done: t.done,
+      })),
+      journal: {
+        text: day.journal?.text || '',
+        tags: day.journal?.tags || [],
+        images: (day.journal?.images || []).map((img, i) => ({
+          index: i,
+          driveId: img.driveId,
+          name: img.name || `image_${i+1}`,
+        })),
+        videos: (day.journal?.videos || []).map((vid, i) => ({
+          index: i,
+          driveId: vid.driveId,
+          name: vid.name || `video_${i+1}`,
+        })),
+      },
       practicesDone: day.practicesDone || {},
       wirdCounts: day.wirdCounts || {},
     },
     mal: {
       budget: DB.mal?.budget || 0,
-      recentExpenses: (DB.mal?.expenses || []).slice(-10).map(e => ({ id: e.id, amount: e.amount, desc: e.desc, date: e.date })),
+      recentExpenses: (DB.mal?.expenses || []).slice(-10).map(e => ({
+        id: e.id, amount: e.amount, desc: e.desc, date: e.date,
+      })),
     },
     profile: { name: DB.profile?.name || '' },
   };
@@ -7132,15 +7152,20 @@ RULES:
 4. For prayers: location must be "mosque", "home", or "not_yet". timing must be "on_time", "late", or "not_yet".
 5. When location is "mosque", always set timing to "on_time".
 6. "All salawat" means all 5: fajr, dhuhr, asr, maghrib, isha.
-7. For expenses: add a new object to mal.expenses array with fields: id (generate a short random string), amount (number), desc (string), date (current ISO date string: ${new Date().toISOString()}).
+7. For expenses: add a new object to mal.expenses array with fields: id (generate a short random string like "exp_abc123"), amount (number), desc (string), date (current ISO date string: ${new Date().toISOString()}).
 8. For journal autocorrect: fix spelling and grammar of the text field, preserve Arabic words exactly, return the corrected text in days[today].journal.text.
-9. For niyyah: update days[today].niyyah with the user's intention.
-10. If you cannot understand the request, return: {"error": "Could not understand request"}
-11. Never delete data. Never set arrays to null. Never invent new top-level keys.
+9. For niyyah: update days[today].niyyah with the user's intention as a clean sentence.
+10. For adding a task: add to days[today].tasks array. Task object: { id: "t_" + random 6 chars, name: string, block: one of [fajr,dhuhr,asr,maghrib,isha], note: string or "", duration: number (minutes) or null, pomSessions: 4, done: false, createdAt: "${todayStr()}" }. Pick the most logical block based on context or time of day.
+11. For completing/marking a task done: find the task by name in days[today].tasks and set done:true. Return the full updated tasks array.
+12. For deleting a task: return days[today].tasks as the full array with that task removed.
+13. For deleting a journal image: return days[today].journal.images as the full array with that image removed. Images are objects with driveId and name fields. "first image" = index 0, "last image" = last item, "second image" = index 1.
+14. If you cannot understand the request, return: {"error": "Could not understand request"}
+15. Never delete data unless explicitly asked. Never set arrays to null.
 
 PRAYER IDS: fajr, dhuhr, asr, maghrib, isha
-TASK BLOCK IDS: fajr, dhuhr, asr, maghrib, isha (the time block after that prayer)
-TODAY: ${todayStr()}`;
+TASK BLOCK IDS (time block after that prayer): fajr, dhuhr, asr, maghrib, isha
+TODAY: ${todayStr()}
+CURRENT TIME: ${new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'})}`;
 }
 
 // ── Call Groq with fallback models ──
@@ -7238,6 +7263,22 @@ async function aiRun() {
     if (patch.days) {
       for (const [dateKey, dayPatch] of Object.entries(patch.days)) {
         const existingDay = getDay(dateKey);
+
+        // Tasks — AI returns the full array, replace directly
+        if (dayPatch.tasks !== undefined) {
+          existingDay.tasks = dayPatch.tasks;
+          delete dayPatch.tasks;
+        }
+
+        // Journal images — AI returns the full array, replace directly
+        if (dayPatch.journal?.images !== undefined) {
+          if (!existingDay.journal) existingDay.journal = {text:'',tags:[],images:[],videos:[]};
+          existingDay.journal.images = dayPatch.journal.images;
+          delete dayPatch.journal.images;
+          if (Object.keys(dayPatch.journal).length === 0) delete dayPatch.journal;
+        }
+
+        // Everything else — deep merge
         aiDeepMerge(existingDay, dayPatch);
       }
     }
