@@ -101,8 +101,90 @@ body {
   /* Subtle paper grain */
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
-  padding-bottom: calc(var(--nav-h) + 24px);
+  padding-bottom: calc(var(--nav-h) + 80px);
 }
+
+/* ──────────────────────────────────────────────
+   AI COMMAND BAR
+────────────────────────────────────────────── */
+#ai-bar {
+  position: fixed;
+  bottom: calc(var(--nav-h) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 799;
+  width: min(calc(100vw - 32px), var(--col));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 50px;
+  padding: 8px 8px 8px 18px;
+  box-shadow: 0 4px 24px rgba(20,18,14,0.10), 0 1px 4px rgba(20,18,14,0.06);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+#ai-bar:focus-within {
+  border-color: var(--gold);
+  box-shadow: 0 4px 28px rgba(176,120,24,0.15), 0 1px 4px rgba(20,18,14,0.06);
+}
+#ai-input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  font-family: var(--serif);
+  font-size: 15px;
+  font-style: italic;
+  color: var(--text);
+  caret-color: var(--gold);
+  min-width: 0;
+}
+#ai-input::placeholder { color: var(--text4); font-style: italic; }
+#ai-send-btn {
+  flex-shrink: 0;
+  width: 34px; height: 34px;
+  background: var(--text);
+  border: none;
+  border-radius: 50%;
+  color: var(--bg);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s var(--ease);
+}
+#ai-send-btn:hover { background: var(--gold); transform: scale(1.06); }
+#ai-send-btn:disabled { opacity: 0.5; cursor: default; transform: none; }
+
+/* AI status toast */
+#ai-toast {
+  position: fixed;
+  bottom: calc(var(--nav-h) + 80px);
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  z-index: 798;
+  background: var(--text);
+  color: var(--bg);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  padding: 8px 18px;
+  border-radius: 50px;
+  box-shadow: var(--shadow-md);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s, transform 0.25s;
+  white-space: nowrap;
+  max-width: calc(100vw - 40px);
+  text-align: center;
+}
+#ai-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+#ai-toast.ai-ok   { background: var(--green); }
+#ai-toast.ai-err  { background: var(--rust);  }
 
 /* ──────────────────────────────────────────────
    SCROLLBAR
@@ -6833,6 +6915,13 @@ function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
   </div>
 </div>
 
+<!-- AI Command Bar -->
+<div id="ai-toast"></div>
+<div id="ai-bar">
+  <input id="ai-input" type="text" placeholder="Tell SaadOs anything… prayed all salawat in masjid, spent 50 MAD on lunch…" autocomplete="off" autocorrect="off" spellcheck="false" />
+  <button id="ai-send-btn" onclick="aiRun()" title="Run">✦</button>
+</div>
+
 <script>
 // Register service worker for PWA installability + offline app shell
 if ('serviceWorker' in navigator) {
@@ -6896,13 +6985,272 @@ function scheduleReminder() {
   const elapsed = Date.now() - last;
 
   if (last && elapsed < intervalMs) {
-    // Not due yet — schedule for whenever the remaining time is up
     _reminderTimer = setTimeout(() => { _sendReminderNotification(); scheduleReminder(); }, intervalMs - elapsed);
   } else {
-    // Overdue (e.g. app was closed past the interval) or never sent — nudge shortly after open, then resume the regular cadence
     _reminderTimer = setTimeout(() => { _sendReminderNotification(); scheduleReminder(); }, 15000);
   }
 }
+
+/* ════════════════════════════════════════════════
+   AI COMMAND BAR — Gemini-powered natural language
+   → JSON patch → DB merge → markUnsaved()
+════════════════════════════════════════════════ */
+
+const GEMINI_API_KEY = 'AQ.Ab8RN6JHWbLQkmPRotNbt-0wjzTt-VvbtK6g3xbanIf0WAcnWQ';
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+// Safe top-level keys AI is allowed to touch
+const AI_ALLOWED_KEYS = new Set(['days', 'mal', 'wird', 'practices', 'profile']);
+
+// Known sub-keys inside a day object
+const AI_DAY_KEYS = new Set(['niyyah', 'tasks', 'prayers', 'nawafil', 'practicesDone', 'wirdCounts', 'journal', 'totalFocusSec', 'focusTime']);
+
+// Known prayer IDs
+const PRAYER_IDS = new Set(['fajr', 'dhuhr', 'asr', 'maghrib', 'isha']);
+
+// ── Toast helper ──
+let _aiToastTimer = null;
+function aiToast(msg, type = '') {
+  const el = document.getElementById('ai-toast');
+  el.textContent = msg;
+  el.className = 'show' + (type ? ' ai-' + type : '');
+  clearTimeout(_aiToastTimer);
+  _aiToastTimer = setTimeout(() => { el.className = ''; }, type === 'err' ? 4000 : 2800);
+}
+
+// ── Deep merge — only overwrites, never deletes ──
+function aiDeepMerge(target, patch) {
+  for (const key of Object.keys(patch)) {
+    if (patch[key] !== null && typeof patch[key] === 'object' && !Array.isArray(patch[key])) {
+      if (typeof target[key] !== 'object' || Array.isArray(target[key])) {
+        target[key] = {};
+      }
+      aiDeepMerge(target[key], patch[key]);
+    } else {
+      target[key] = patch[key];
+    }
+  }
+}
+
+// ── Validate patch structure — reject anything suspicious ──
+function aiValidatePatch(patch) {
+  if (typeof patch !== 'object' || Array.isArray(patch) || patch === null) {
+    return 'Patch is not an object';
+  }
+
+  for (const key of Object.keys(patch)) {
+    // Only allowed top-level keys
+    if (!AI_ALLOWED_KEYS.has(key)) {
+      return `Unknown top-level key: "${key}"`;
+    }
+
+    // Validate days patch
+    if (key === 'days') {
+      const days = patch.days;
+      if (typeof days !== 'object' || Array.isArray(days)) return 'days must be an object';
+      for (const dateKey of Object.keys(days)) {
+        // Date key format: YYYY-MM-DD
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+          return `Invalid date key: "${dateKey}"`;
+        }
+        // Reject future dates
+        if (dateKey > todayStr()) {
+          return `Rejected future date: "${dateKey}"`;
+        }
+        const dayPatch = days[dateKey];
+        if (typeof dayPatch !== 'object' || Array.isArray(dayPatch)) return 'day entry must be an object';
+        for (const dk of Object.keys(dayPatch)) {
+          if (!AI_DAY_KEYS.has(dk)) return `Unknown day key: "${dk}"`;
+        }
+        // Validate prayers sub-keys
+        if (dayPatch.prayers) {
+          for (const pid of Object.keys(dayPatch.prayers)) {
+            if (!PRAYER_IDS.has(pid)) return `Unknown prayer id: "${pid}"`;
+            const pr = dayPatch.prayers[pid];
+            if (pr.location && !['mosque', 'home', 'not_yet'].includes(pr.location)) {
+              return `Invalid prayer location: "${pr.location}"`;
+            }
+            if (pr.timing && !['on_time', 'late', 'not_yet'].includes(pr.timing)) {
+              return `Invalid prayer timing: "${pr.timing}"`;
+            }
+          }
+        }
+      }
+    }
+
+    // Validate mal patch
+    if (key === 'mal') {
+      const mal = patch.mal;
+      if (typeof mal !== 'object' || Array.isArray(mal)) return 'mal must be an object';
+      const malKeys = new Set(['budget', 'expenses']);
+      for (const mk of Object.keys(mal)) {
+        if (!malKeys.has(mk)) return `Unknown mal key: "${mk}"`;
+      }
+      if (mal.expenses !== undefined && !Array.isArray(mal.expenses)) {
+        return 'mal.expenses must be an array';
+      }
+    }
+  }
+
+  return null; // null = valid
+}
+
+// ── Build a lean DB snapshot for the prompt ──
+function aiBuildContext() {
+  const today = todayStr();
+  const day = DB.days[today] || {};
+
+  // Only send today's day data + mal to keep token count small
+  return {
+    today: today,
+    currentSection: currentSection,
+    todayData: {
+      niyyah: day.niyyah || '',
+      prayers: day.prayers || {},
+      nawafil: day.nawafil || [],
+      tasks: (day.tasks || []).map(t => ({ id: t.id, name: t.name, block: t.block, done: t.done })),
+      journal: { text: day.journal?.text || '', tags: day.journal?.tags || [] },
+      practicesDone: day.practicesDone || {},
+      wirdCounts: day.wirdCounts || {},
+    },
+    mal: {
+      budget: DB.mal?.budget || 0,
+      recentExpenses: (DB.mal?.expenses || []).slice(-10).map(e => ({ id: e.id, amount: e.amount, desc: e.desc, date: e.date })),
+    },
+    profile: { name: DB.profile?.name || '' },
+  };
+}
+
+// ── Build the system prompt ──
+function aiBuildSystemPrompt() {
+  return `You are a data assistant for SaadOs, an Islamic personal productivity app. The user speaks to you in plain language and you must return ONLY a valid JSON patch to update the app's database.
+
+RULES:
+1. Return ONLY raw JSON — no markdown, no backticks, no explanation, no preamble.
+2. Only include fields that need to change. Never include unchanged data.
+3. Only use these top-level keys: "days", "mal". Never use others.
+4. For prayers: location must be "mosque", "home", or "not_yet". timing must be "on_time", "late", or "not_yet".
+5. When location is "mosque", always set timing to "on_time".
+6. "All salawat" means all 5: fajr, dhuhr, asr, maghrib, isha.
+7. For expenses: add a new object to mal.expenses array with fields: id (generate a short random string), amount (number), desc (string), date (current ISO date string: ${new Date().toISOString()}).
+8. For journal autocorrect: fix spelling and grammar of the text field, preserve Arabic words exactly, return the corrected text in days[today].journal.text.
+9. For niyyah: update days[today].niyyah with the user's intention.
+10. If you cannot understand the request, return: {"error": "Could not understand request"}
+11. Never delete data. Never set arrays to null. Never invent new top-level keys.
+
+PRAYER IDS: fajr, dhuhr, asr, maghrib, isha
+TASK BLOCK IDS: fajr, dhuhr, asr, maghrib, isha (the time block after that prayer)
+TODAY: ${todayStr()}`;
+}
+
+// ── Main AI run function ──
+async function aiRun() {
+  const input = document.getElementById('ai-input');
+  const btn   = document.getElementById('ai-send-btn');
+  const text  = input.value.trim();
+  if (!text) { input.focus(); return; }
+
+  if (GEMINI_API_KEY === 'YOUR_GEMINI_API_KEY_HERE') {
+    aiToast('⚠ Add your Gemini API key to the file first', 'err');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '…';
+  aiToast('Thinking…');
+
+  const context = aiBuildContext();
+  const userMessage = `Current app state:\n${JSON.stringify(context, null, 2)}\n\nUser command: "${text}"`;
+
+  try {
+    const res = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [
+          { role: 'user', parts: [{ text: aiBuildSystemPrompt() }] },
+          { role: 'model', parts: [{ text: 'Understood. I will return only raw JSON patches.' }] },
+          { role: 'user', parts: [{ text: userMessage }] },
+        ],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 1000 },
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err?.error?.message || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+    // Strip any accidental markdown fences
+    const clean = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+
+    let patch;
+    try {
+      patch = JSON.parse(clean);
+    } catch (e) {
+      throw new Error('AI returned invalid JSON — try rephrasing');
+    }
+
+    // Check if AI returned an error signal
+    if (patch.error) {
+      throw new Error(patch.error);
+    }
+
+    // Validate before touching anything
+    const validationError = aiValidatePatch(patch);
+    if (validationError) {
+      throw new Error('Validation failed: ' + validationError);
+    }
+
+    // ── SAFE MERGE ──
+    if (patch.days) {
+      for (const [dateKey, dayPatch] of Object.entries(patch.days)) {
+        // Ensure the day exists in DB (getDay initialises it properly)
+        const existingDay = getDay(dateKey);
+        aiDeepMerge(existingDay, dayPatch);
+      }
+    }
+
+    if (patch.mal) {
+      if (!DB.mal) DB.mal = { budget: 0, expenses: [] };
+      if (patch.mal.budget !== undefined) {
+        DB.mal.budget = patch.mal.budget;
+      }
+      if (patch.mal.expenses) {
+        // AI sends new expenses to append — don't replace the array
+        if (!Array.isArray(DB.mal.expenses)) DB.mal.expenses = [];
+        for (const exp of patch.mal.expenses) {
+          // Only append if id doesn't already exist (idempotent)
+          if (exp.id && !DB.mal.expenses.find(e => e.id === exp.id)) {
+            DB.mal.expenses.push(exp);
+          }
+        }
+      }
+    }
+
+    // ── Done — persist and re-render ──
+    markUnsaved();
+    renderSection();
+
+    input.value = '';
+    aiToast('Done ✓', 'ok');
+
+  } catch (err) {
+    console.error('AI command error:', err);
+    aiToast('✕ ' + (err.message || 'Something went wrong'), 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✦';
+  }
+}
+
+// Enter key submits
+document.getElementById('ai-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); aiRun(); }
+});
 </script>
 
 </body>
