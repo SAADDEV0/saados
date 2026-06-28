@@ -6992,12 +6992,12 @@ function scheduleReminder() {
 }
 
 /* ════════════════════════════════════════════════
-   AI COMMAND BAR — OpenRouter-powered natural language
+   AI COMMAND BAR — Groq-powered natural language
    → JSON patch → DB merge → markUnsaved()
 ════════════════════════════════════════════════ */
 
-const OPENROUTER_API_KEY = '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';
-const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const GROQ_API_KEY = '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';
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 // Safe top-level keys AI is allowed to touch
 const AI_ALLOWED_KEYS = new Set(['days', 'mal', 'wird', 'practices', 'profile']);
@@ -7143,25 +7143,22 @@ TASK BLOCK IDS: fajr, dhuhr, asr, maghrib, isha (the time block after that praye
 TODAY: ${todayStr()}`;
 }
 
-// ── Call OpenRouter with fallback models ──
-async function aiCallOpenRouter(systemPrompt, userMessage) {
+// ── Call Groq with fallback models ──
+async function aiCallGroq(systemPrompt, userMessage) {
   const models = [
-    'google/gemma-3-27b-it:free',
-    'meta-llama/llama-3.3-70b-instruct:free',
-    'mistralai/mistral-7b-instruct:free',
-    'qwen/qwen3-8b:free',
+    'llama-3.3-70b-versatile',
+    'llama3-70b-8192',
+    'llama-3.1-8b-instant',
   ];
 
   let lastError = null;
   for (const model of models) {
     try {
-      const res = await fetch(OPENROUTER_URL, {
+      const res = await fetch(GROQ_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'HTTP-Referer': window.location.href,
-          'X-Title': 'SaadOs',
+          'Authorization': `Bearer ${GROQ_API_KEY}`,
         },
         body: JSON.stringify({
           model,
@@ -7176,7 +7173,6 @@ async function aiCallOpenRouter(systemPrompt, userMessage) {
 
       const data = await res.json();
 
-      // Provider error — try next model
       if (!res.ok || data?.error) {
         lastError = data?.error?.message || `HTTP ${res.status}`;
         continue;
@@ -7185,14 +7181,14 @@ async function aiCallOpenRouter(systemPrompt, userMessage) {
       const raw = data?.choices?.[0]?.message?.content || '';
       if (!raw) { lastError = 'Empty response'; continue; }
 
-      return raw; // success
+      return raw;
     } catch (e) {
       lastError = e.message;
       continue;
     }
   }
 
-  throw new Error(lastError || 'All models failed — try again later');
+  throw new Error(lastError || 'All models failed — try again');
 }
 
 // ── Main AI run function ──
@@ -7202,8 +7198,8 @@ async function aiRun() {
   const text  = input.value.trim();
   if (!text) { input.focus(); return; }
 
-  if (OPENROUTER_API_KEY === 'YOUR_OPENROUTER_KEY_HERE') {
-    aiToast('⚠ Add your OpenRouter API key to the file first', 'err');
+  if (GROQ_API_KEY === 'YOUR_GROQ_KEY_HERE') {
+    aiToast('⚠ Add your Groq API key to the file first', 'err');
     return;
   }
 
@@ -7215,7 +7211,7 @@ async function aiRun() {
   const userMessage = `Current app state:\n${JSON.stringify(context, null, 2)}\n\nUser command: "${text}"`;
 
   try {
-    const raw = await aiCallOpenRouter(aiBuildSystemPrompt(), userMessage);
+    const raw = await aiCallGroq(aiBuildSystemPrompt(), userMessage);
 
     // Strip any accidental markdown fences
     const clean = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
