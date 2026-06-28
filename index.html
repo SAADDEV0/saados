@@ -6992,12 +6992,13 @@ function scheduleReminder() {
 }
 
 /* ════════════════════════════════════════════════
-   AI COMMAND BAR — Gemini-powered natural language
+   AI COMMAND BAR — OpenRouter-powered natural language
    → JSON patch → DB merge → markUnsaved()
 ════════════════════════════════════════════════ */
 
-const GEMINI_API_KEY = 'AQ.Ab8RN6Luwad1CWM26E7vpKLysZoY8dM_4jj-d1wXe5oGzQWn-g';
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+const OPENROUTER_API_KEY = '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';
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+
 // Safe top-level keys AI is allowed to touch
 const AI_ALLOWED_KEYS = new Set(['days', 'mal', 'wird', 'practices', 'profile']);
 
@@ -7149,8 +7150,8 @@ async function aiRun() {
   const text  = input.value.trim();
   if (!text) { input.focus(); return; }
 
-  if (GEMINI_API_KEY === 'YOUR_GEMINI_API_KEY_HERE') {
-    aiToast('⚠ Add your Gemini API key to the file first', 'err');
+  if (OPENROUTER_API_KEY === 'YOUR_OPENROUTER_KEY_HERE') {
+    aiToast('⚠ Add your OpenRouter API key to the file first', 'err');
     return;
   }
 
@@ -7162,16 +7163,28 @@ async function aiRun() {
   const userMessage = `Current app state:\n${JSON.stringify(context, null, 2)}\n\nUser command: "${text}"`;
 
   try {
-    const res = await fetch(GEMINI_URL, {
+    const res = await fetch(OPENROUTER_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'HTTP-Referer': window.location.href,
+        'X-Title': 'SaadOs',
+      },
       body: JSON.stringify({
-        contents: [
-          { role: 'user', parts: [{ text: aiBuildSystemPrompt() }] },
-          { role: 'model', parts: [{ text: 'Understood. I will return only raw JSON patches.' }] },
-          { role: 'user', parts: [{ text: userMessage }] },
+        model: 'meta-llama/llama-3.3-70b-instruct:free',
+        messages: [
+          {
+            role: 'system',
+            content: aiBuildSystemPrompt(),
+          },
+          {
+            role: 'user',
+            content: userMessage,
+          },
         ],
-        generationConfig: { temperature: 0.1, maxOutputTokens: 1000 },
+        temperature: 0.1,
+        max_tokens: 1000,
       }),
     });
 
@@ -7181,7 +7194,7 @@ async function aiRun() {
     }
 
     const data = await res.json();
-    const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const raw = data?.choices?.[0]?.message?.content || '';
 
     // Strip any accidental markdown fences
     const clean = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
@@ -7207,7 +7220,6 @@ async function aiRun() {
     // ── SAFE MERGE ──
     if (patch.days) {
       for (const [dateKey, dayPatch] of Object.entries(patch.days)) {
-        // Ensure the day exists in DB (getDay initialises it properly)
         const existingDay = getDay(dateKey);
         aiDeepMerge(existingDay, dayPatch);
       }
@@ -7219,10 +7231,8 @@ async function aiRun() {
         DB.mal.budget = patch.mal.budget;
       }
       if (patch.mal.expenses) {
-        // AI sends new expenses to append — don't replace the array
         if (!Array.isArray(DB.mal.expenses)) DB.mal.expenses = [];
         for (const exp of patch.mal.expenses) {
-          // Only append if id doesn't already exist (idempotent)
           if (exp.id && !DB.mal.expenses.find(e => e.id === exp.id)) {
             DB.mal.expenses.push(exp);
           }
