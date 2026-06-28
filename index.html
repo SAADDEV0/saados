@@ -6997,8 +6997,7 @@ function scheduleReminder() {
 ════════════════════════════════════════════════ */
 
 const GEMINI_API_KEY = 'AQ.Ab8RN6Luwad1CWM26E7vpKLysZoY8dM_4jj-d1wXe5oGzQWn-g';
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
-
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 // Safe top-level keys AI is allowed to touch
 const AI_ALLOWED_KEYS = new Set(['days', 'mal', 'wird', 'practices', 'profile']);
 
