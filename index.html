@@ -191,9 +191,8 @@ body {
 ────────────────────────────────────────────── */
 #ai-chat-window {
   position: fixed;
-  bottom: calc(var(--nav-h) + 80px);
-  left: 50%;
-  transform: translateX(-50%);
+  top: 90px;
+  left: 16px;
   z-index: 797;
   width: min(calc(100vw - 32px), var(--col));
   background: var(--surface);
@@ -203,7 +202,7 @@ body {
   display: none;
   flex-direction: column;
   overflow: hidden;
-  max-height: 420px;
+  max-height: calc(100vh - 180px);
 }
 #ai-chat-window.open { display: flex; }
 
@@ -671,6 +670,22 @@ body {
   color: var(--ink3);
 }
 .hero-settings-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+.hero-ai-btn {
+  position: absolute; top: 40px; left: 0;
+  width: 34px; height: 34px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  transition: all 0.2s var(--ease);
+  box-shadow: var(--shadow-sm);
+  color: var(--ink3);
+}
+.hero-ai-btn:hover  { border-color: var(--gold); color: var(--gold); }
+.hero-ai-btn.active { border-color: var(--gold); color: var(--gold); background: var(--surface2); }
 
 /* ──────────────────────────────────────────────
    FLOATING NAV
@@ -3095,6 +3110,7 @@ canvas { width: 100%; display: block; }
       <div class="hero-today-pill" onclick="goToday()">Today</div>
       <button class="hero-day-btn" onclick="shiftDay(1)">›</button>
     </div>
+    <button class="hero-ai-btn" id="hero-ai-btn" onclick="aiChatToggle()" title="SaadOs AI">✦</button>
     <button class="hero-settings-btn" onclick="openSettings()">⚙</button>
     <div id="sync-status-hero">
       <div class="sync-dot idle" id="sync-dot"></div>
@@ -7335,42 +7351,42 @@ function aiBuildContext() {
   const today = todayStr();
   const day = DB.days[today] || {};
 
+  // Build last 7 days of prayer + task data
+  const last7 = {};
+  for (let i = 0; i < 7; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    const dayData = DB.days[key];
+    if (dayData) {
+      last7[key] = {
+        niyyah: dayData.niyyah || '',
+        prayers: dayData.prayers || {},
+        nawafil: dayData.nawafil || [],
+        tasks: (dayData.tasks || []).map(t => ({
+          id: t.id, name: t.name, block: t.block,
+          note: t.note || '', done: t.done,
+        })),
+        journal: {
+          text: dayData.journal?.text || '',
+          tags: dayData.journal?.tags || [],
+          images: (dayData.journal?.images || []).map((img, i) => ({
+            index: i, driveId: img.driveId, name: img.name || `image_${i+1}`,
+          })),
+        },
+        practicesDone: dayData.practicesDone || {},
+        wirdCounts: dayData.wirdCounts || {},
+      };
+    }
+  }
+
   return {
     today: today,
     currentSection: currentSection,
-    todayData: {
-      niyyah: day.niyyah || '',
-      prayers: day.prayers || {},
-      nawafil: day.nawafil || [],
-      tasks: (day.tasks || []).map(t => ({
-        id: t.id,
-        name: t.name,
-        block: t.block,
-        note: t.note || '',
-        duration: t.duration || null,
-        pomSessions: t.pomSessions || 4,
-        done: t.done,
-      })),
-      journal: {
-        text: day.journal?.text || '',
-        tags: day.journal?.tags || [],
-        images: (day.journal?.images || []).map((img, i) => ({
-          index: i,
-          driveId: img.driveId,
-          name: img.name || `image_${i+1}`,
-        })),
-        videos: (day.journal?.videos || []).map((vid, i) => ({
-          index: i,
-          driveId: vid.driveId,
-          name: vid.name || `video_${i+1}`,
-        })),
-      },
-      practicesDone: day.practicesDone || {},
-      wirdCounts: day.wirdCounts || {},
-    },
+    last7days: last7,
     mal: {
       budget: DB.mal?.budget || 0,
-      recentExpenses: (DB.mal?.expenses || []).slice(-10).map(e => ({
+      recentExpenses: (DB.mal?.expenses || []).slice(-20).map(e => ({
         id: e.id, amount: e.amount, desc: e.desc, date: e.date,
       })),
     },
@@ -7402,8 +7418,8 @@ RULES:
 PRAYER IDS: fajr, dhuhr, asr, maghrib, isha
 TASK BLOCK IDS (time block after that prayer): fajr, dhuhr, asr, maghrib, isha
 TODAY: ${todayStr()}
-CURRENT TIME: ${new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'})}`;
-}
+CURRENT TIME: ${new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'})}
+DATA STRUCTURE: context.last7days is an object keyed by date (YYYY-MM-DD) containing each day's prayers, tasks, journal, nawafil, wirdCounts, practicesDone. context.mal has budget and recentExpenses (last 20).`;
 
 // ── Call Groq with fallback models ──
 async function aiCallGroq(systemPrompt, userMessage) {
@@ -7564,14 +7580,17 @@ const aiChatHistory = [];
 
 function aiChatToggle() {
   const win = document.getElementById('ai-chat-window');
-  const btn = document.getElementById('ai-chat-toggle');
-  const isOpen = win.classList.contains('open');
+  const heroBtn = document.getElementById('hero-ai-btn');
+  const barBtn  = document.getElementById('ai-chat-toggle');
+  const isOpen  = win.classList.contains('open');
   if (isOpen) {
     win.classList.remove('open');
-    btn.classList.remove('active');
+    heroBtn && heroBtn.classList.remove('active');
+    barBtn  && barBtn.classList.remove('active');
   } else {
     win.classList.add('open');
-    btn.classList.add('active');
+    heroBtn && heroBtn.classList.add('active');
+    barBtn  && barBtn.classList.add('active');
     document.getElementById('ai-chat-input').focus();
     aiChatScrollBottom();
   }
@@ -7579,7 +7598,10 @@ function aiChatToggle() {
 
 function aiChatClose() {
   document.getElementById('ai-chat-window').classList.remove('open');
-  document.getElementById('ai-chat-toggle').classList.remove('active');
+  const heroBtn = document.getElementById('hero-ai-btn');
+  const barBtn  = document.getElementById('ai-chat-toggle');
+  heroBtn && heroBtn.classList.remove('active');
+  barBtn  && barBtn.classList.remove('active');
 }
 
 function aiChatScrollBottom() {
