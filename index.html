@@ -191,9 +191,10 @@ body {
 ────────────────────────────────────────────── */
 #ai-chat-window {
   position: fixed;
-  top: 90px;
-  left: 16px;
-  z-index: 797;
+  top: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 900;
   width: min(calc(100vw - 32px), var(--col));
   background: var(--surface);
   border: 1.5px solid var(--border);
@@ -202,7 +203,7 @@ body {
   display: none;
   flex-direction: column;
   overflow: hidden;
-  max-height: calc(100vh - 180px);
+  max-height: calc(100dvh - 160px);
 }
 #ai-chat-window.open { display: flex; }
 
@@ -657,7 +658,7 @@ body {
 }
 .hero-today-pill:hover { background: var(--gold); }
 .hero-settings-btn {
-  position: absolute; top: 40px; right: 0;
+  position: absolute; top: 40px; right: -4px;
   width: 34px; height: 34px;
   border: 1.5px solid var(--border);
   background: var(--surface);
@@ -672,7 +673,7 @@ body {
 .hero-settings-btn:hover { border-color: var(--gold); color: var(--gold); }
 
 .hero-ai-btn {
-  position: absolute; top: 40px; left: 0;
+  position: absolute; top: 40px; left: -4px;
   width: 34px; height: 34px;
   border: 1.5px solid var(--border);
   background: var(--surface);
@@ -683,6 +684,7 @@ body {
   transition: all 0.2s var(--ease);
   box-shadow: var(--shadow-sm);
   color: var(--ink3);
+  z-index: 10;
 }
 .hero-ai-btn:hover  { border-color: var(--gold); color: var(--gold); }
 .hero-ai-btn.active { border-color: var(--gold); color: var(--gold); background: var(--surface2); }
@@ -3338,45 +3340,79 @@ function setSyncState(s, detail) {
 }
 
 /* ════════════════════════════════════════════════
-   MARK CHANGED → DEBOUNCED DRIVE PUSH
+   MARK CHANGED → IMMEDIATE DRIVE PUSH
+   Drive is source of truth. localStorage is buffer only.
+   Journal text debounced 2s. Everything else pushes instantly.
 ════════════════════════════════════════════════ */
-function markUnsaved() {
-  if(!driveReady) return;
-  if(!DB.gdrive.connected) { setSyncState('offline'); return; }
+
+let _journalDebounce = null;
+let _unsyncedChanges = false;
+
+function _showUnsyncedWarning(show) {
+  _unsyncedChanges = show;
+  let bar = document.getElementById('ai-unsync-bar');
+  if (show && !bar) {
+    bar = document.createElement('div');
+    bar.id = 'ai-unsync-bar';
+    bar.style.cssText = `
+      position:fixed; top:0; left:0; right:0; z-index:9999;
+      background:var(--rust); color:#fff;
+      font-family:var(--sans); font-size:12px; font-weight:500;
+      text-align:center; padding:7px 16px;
+      display:flex; align-items:center; justify-content:center; gap:10px;
+    `;
+    bar.innerHTML = `⚠ Not synced to Drive — don't switch devices yet
+      <button onclick="drivePush().then(()=>{setSyncState('ok');_showUnsyncedWarning(false)}).catch(()=>{})"
+        style="background:rgba(255,255,255,0.25);border:none;color:#fff;border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer">
+        Retry
+      </button>`;
+    document.body.prepend(bar);
+  } else if (!show && bar) {
+    bar.remove();
+  }
+}
+
+function markUnsaved(isJournalText = false) {
+  if (!driveReady) return;
+  if (!DB.gdrive.connected) { setSyncState('offline'); return; }
   markDayDirty(currentDate);
-  setSyncState('syncing');
-  clearTimeout(syncDebounce);
-  syncDebounce = setTimeout(async () => {
-    try {
-      // If token is missing or expiring in the next 2 min, refresh silently first
-      if(!gdriveToken || Date.now() > gdriveTokenExpiry - 2 * 60 * 1000) {
-        await silentDriveAuth(false);
-      }
-      if(!gdriveToken) { setSyncState('offline'); return; }
-      await drivePush();
-      setSyncState('ok');
-    } catch(e) {
-      console.error('Sync failed:', e.message);
-      syncState = 'error';
-      const dot = document.getElementById('sync-dot');
-      const lbl = document.getElementById('sync-label');
-      if(dot) dot.className = 'sync-dot error';
-      if(lbl) lbl.textContent = 'Sync failed — ' + e.message;
-      // Auto-retry after 8s
-      setTimeout(() => {
-        if(syncState === 'error' && DB.gdrive.connected && driveReady) {
-          setSyncState('syncing');
-          drivePush()
-            .then(() => setSyncState('ok'))
-            .catch(err => {
-              syncState = 'error';
-              const l = document.getElementById('sync-label');
-              if(l) l.textContent = 'Sync failed — ' + err.message;
-            });
-        }
-      }, 8000);
+
+  if (isJournalText) {
+    // Debounce journal text — wait 2s after user stops typing
+    setSyncState('syncing');
+    clearTimeout(_journalDebounce);
+    _journalDebounce = setTimeout(() => _doPush(), 2000);
+  } else {
+    // Everything else — push immediately
+    setSyncState('syncing');
+    clearTimeout(_journalDebounce);
+    _doPush();
+  }
+}
+
+async function _doPush() {
+  try {
+    if (!gdriveToken || Date.now() > gdriveTokenExpiry - 2 * 60 * 1000) {
+      await silentDriveAuth(false);
     }
-  }, 1500);
+    if (!gdriveToken) { setSyncState('offline'); _showUnsyncedWarning(true); return; }
+    await drivePush();
+    setSyncState('ok');
+    _showUnsyncedWarning(false);
+  } catch(e) {
+    console.error('Sync failed:', e.message);
+    setSyncState('error');
+    _showUnsyncedWarning(true);
+    const lbl = document.getElementById('sync-label');
+    if (lbl) lbl.textContent = 'Sync failed — ' + e.message;
+    // Auto-retry after 8s
+    setTimeout(() => {
+      if (syncState === 'error' && DB.gdrive.connected && driveReady) {
+        setSyncState('syncing');
+        _doPush();
+      }
+    }, 8000);
+  }
 }
 
 
@@ -3924,7 +3960,7 @@ function renderNiyyah(el) {
 
   el.innerHTML = h;
   el.querySelector('#niyyah-text').addEventListener('input',e=>{
-    getDay(currentDate).niyyah=e.target.value; markUnsaved();
+    getDay(currentDate).niyyah=e.target.value; markUnsaved(true);
   });
 
   // Async: load real prayer times into timeline dot labels
@@ -5211,7 +5247,7 @@ function sjSave(v) {
   // auto-resize
   const ta = document.getElementById('sj-ta');
   if(ta) { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
-  markUnsaved();
+  markUnsaved(true); // journal text — debounced 2s
 }
 
 // Auto-inserts a "HH:MM : " timestamp at the start of every new line when the
@@ -7420,6 +7456,7 @@ TASK BLOCK IDS (time block after that prayer): fajr, dhuhr, asr, maghrib, isha
 TODAY: ${todayStr()}
 CURRENT TIME: ${new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'})}
 DATA STRUCTURE: context.last7days is an object keyed by date (YYYY-MM-DD) containing each day's prayers, tasks, journal, nawafil, wirdCounts, practicesDone. context.mal has budget and recentExpenses (last 20).`;
+}
 
 // ── Call Groq with fallback models ──
 async function aiCallGroq(systemPrompt, userMessage) {
