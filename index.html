@@ -187,6 +187,221 @@ body {
 #ai-toast.ai-err  { background: var(--rust);  }
 
 /* ──────────────────────────────────────────────
+   AI CHAT WINDOW
+────────────────────────────────────────────── */
+#ai-chat-window {
+  position: fixed;
+  bottom: calc(var(--nav-h) + 80px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 797;
+  width: min(calc(100vw - 32px), var(--col));
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: 420px;
+}
+#ai-chat-window.open { display: flex; }
+
+#ai-chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+  flex-shrink: 0;
+}
+#ai-chat-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ai-chat-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--border2);
+  transition: background 0.3s;
+}
+.ai-chat-dot.thinking {
+  background: var(--gold);
+  animation: ai-pulse 1s ease-in-out infinite;
+}
+.ai-chat-dot.done { background: var(--green); }
+@keyframes ai-pulse {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.5; transform: scale(0.8); }
+}
+#ai-chat-title {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+#ai-chat-close {
+  background: none;
+  border: none;
+  color: var(--text4);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+  transition: color 0.2s;
+}
+#ai-chat-close:hover { color: var(--text); }
+
+#ai-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scroll-behavior: smooth;
+}
+#ai-chat-messages::-webkit-scrollbar { width: 3px; }
+#ai-chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.ai-msg {
+  display: flex;
+  flex-direction: column;
+  max-width: 85%;
+  animation: ai-msg-in 0.2s var(--ease) both;
+}
+@keyframes ai-msg-in {
+  from { opacity:0; transform: translateY(6px); }
+  to   { opacity:1; transform: translateY(0); }
+}
+.ai-msg.user { align-self: flex-end; align-items: flex-end; }
+.ai-msg.ai   { align-self: flex-start; align-items: flex-start; }
+
+.ai-msg-bubble {
+  padding: 9px 13px;
+  border-radius: 16px;
+  font-family: var(--serif);
+  font-size: 14px;
+  line-height: 1.55;
+  word-break: break-word;
+}
+.ai-msg.user .ai-msg-bubble {
+  background: var(--text);
+  color: var(--bg);
+  border-bottom-right-radius: 4px;
+}
+.ai-msg.ai .ai-msg-bubble {
+  background: var(--surface2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 4px;
+}
+.ai-msg.ai.action .ai-msg-bubble {
+  background: var(--green-bg);
+  border-color: var(--green);
+  color: var(--green);
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+}
+.ai-msg.ai.error .ai-msg-bubble {
+  background: var(--rust-bg);
+  border-color: var(--rust);
+  color: var(--rust);
+  font-family: var(--sans);
+  font-size: 12px;
+}
+.ai-msg-time {
+  font-size: 10px;
+  color: var(--text4);
+  margin-top: 3px;
+  padding: 0 4px;
+}
+
+.ai-thinking-bubble {
+  padding: 9px 13px;
+  border-radius: 16px;
+  border-bottom-left-radius: 4px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.ai-thinking-bubble span {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--text4);
+  animation: ai-bounce 1.2s ease-in-out infinite;
+}
+.ai-thinking-bubble span:nth-child(2) { animation-delay: 0.2s; }
+.ai-thinking-bubble span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes ai-bounce {
+  0%,60%,100% { transform: translateY(0); }
+  30%          { transform: translateY(-5px); }
+}
+
+#ai-chat-input-row {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+#ai-chat-input {
+  flex: 1;
+  background: var(--surface2);
+  border: 1.5px solid var(--border);
+  border-radius: 50px;
+  padding: 8px 14px;
+  font-family: var(--serif);
+  font-size: 14px;
+  font-style: italic;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.2s;
+  caret-color: var(--gold);
+}
+#ai-chat-input:focus { border-color: var(--gold); }
+#ai-chat-input::placeholder { color: var(--text4); }
+#ai-chat-send {
+  flex-shrink: 0;
+  width: 34px; height: 34px;
+  background: var(--text);
+  border: none;
+  border-radius: 50%;
+  color: var(--bg);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+  align-self: center;
+}
+#ai-chat-send:hover { background: var(--gold); }
+#ai-chat-send:disabled { opacity: 0.4; cursor: default; }
+
+/* toggle button on the ai-bar */
+#ai-chat-toggle {
+  flex-shrink: 0;
+  width: 34px; height: 34px;
+  background: var(--surface2);
+  border: 1.5px solid var(--border);
+  border-radius: 50%;
+  color: var(--text3);
+  font-size: 13px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s var(--ease);
+}
+#ai-chat-toggle:hover,
+#ai-chat-toggle.active { border-color: var(--gold); color: var(--gold); background: var(--gold-glow); }
+
+/* ──────────────────────────────────────────────
    SCROLLBAR
 ────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 3px; }
@@ -3086,40 +3301,6 @@ let syncState = 'idle'; // 'idle' | 'syncing' | 'ok' | 'error' | 'offline'
 let driveReady = false; // true only after successful pull or confirmed new account — blocks any push before that
 
 /* ════════════════════════════════════════════════
-   LOCAL PERSISTENCE (instant, always-on safety net)
-   DB is saved to localStorage synchronously on every
-   change, BEFORE/REGARDLESS of any Drive sync. Drive
-   remains the cross-device backup/sync layer, but the
-   device itself is never the single point of failure.
-════════════════════════════════════════════════ */
-const LOCAL_DB_KEY = 'saados_db';
-
-function saveLocalDB() {
-  try {
-    localStorage.setItem(LOCAL_DB_KEY, JSON.stringify(DB));
-    return true;
-  } catch (e) {
-    // Quota exceeded, private browsing, etc. — don't crash the app.
-    console.error('Local save failed:', e.message);
-    return false;
-  }
-}
-
-function loadLocalDB() {
-  try {
-    const raw = localStorage.getItem(LOCAL_DB_KEY);
-    if (!raw) return false;
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return false;
-    DB = parsed;
-    return true;
-  } catch (e) {
-    console.error('Local load failed:', e.message);
-    return false;
-  }
-}
-
-/* ════════════════════════════════════════════════
    SYNC STATE UI
 ════════════════════════════════════════════════ */
 function setSyncState(s, detail) {
@@ -3144,12 +3325,6 @@ function setSyncState(s, detail) {
    MARK CHANGED → DEBOUNCED DRIVE PUSH
 ════════════════════════════════════════════════ */
 function markUnsaved() {
-  // ── LOCAL SAVE FIRST — always, regardless of Drive state ──
-  // This is the safety net: even if Drive is offline, not yet
-  // connected, mid-auth, or fails entirely, the change is never
-  // lost — it's already on disk on this device.
-  saveLocalDB();
-
   if(!driveReady) return;
   if(!DB.gdrive.connected) { setSyncState('offline'); return; }
   markDayDirty(currentDate);
@@ -5470,22 +5645,8 @@ async function pushProfile() {
   }, existingId);
 }
 
-const PENDING_DAYS_KEY = 'saados_pending_days';
 let _pendingDays = new Set();
-function markDayDirty(d) {
-  _pendingDays.add(d||currentDate);
-  try { localStorage.setItem(PENDING_DAYS_KEY, JSON.stringify([..._pendingDays])); } catch(e) {}
-}
-function clearPendingDays() {
-  _pendingDays.clear();
-  try { localStorage.removeItem(PENDING_DAYS_KEY); } catch(e) {}
-}
-function loadPendingDays() {
-  try {
-    const raw = localStorage.getItem(PENDING_DAYS_KEY);
-    if(raw) _pendingDays = new Set(JSON.parse(raw));
-  } catch(e) {}
-}
+function markDayDirty(d) { _pendingDays.add(d||currentDate); }
 
 async function drivePush() {
   if(!gdriveToken) throw new Error('No token');
@@ -5501,7 +5662,6 @@ async function drivePush() {
     });
   }
   _pendingDays.clear();
-  try { localStorage.removeItem(PENDING_DAYS_KEY); } catch(e) {}
   DB.gdrive.lastSync = new Date().toISOString();
 }
 
@@ -5589,13 +5749,9 @@ async function drivePull(silent=false) {
     }
 
     // ── 4. Apply day data ─────────────────────────────────────────────────
-    // Skip any day that still has unsynced local changes pending push —
-    // otherwise a stale remote copy could silently overwrite a prayer/task
-    // you just logged on this device before it had a chance to sync out.
     for(const result of dayDataResults) {
       if(!result) continue;
       const { dateStr, parentId, dd } = result;
-      if(_pendingDays.has(dateStr)) { _dayFolderCache[dateStr] = parentId; continue; }
       DB.days[dateStr] = {
         niyyah:dd.niyyah||'', tasks:dd.tasks||[], prayers:dd.prayers||{},
         wirdCounts:dd.wirdCounts||{}, practicesDone:dd.practicesDone||{},
@@ -6886,33 +7042,16 @@ function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
   DB.gdrive.clientId = HARDCODED_CID;
   const wasLoggedIn = localStorage.getItem('raqib_logged_in') === '1';
 
-  // ── LOCAL-FIRST LOAD ──
-  // Load whatever's on this device immediately so the app is usable
-  // right away, even fully offline. Drive is layered on top after,
-  // never a blocking dependency for opening the app or seeing today's data.
-  const hadLocal = loadLocalDB();
-  loadPendingDays();
-
   if(wasLoggedIn) {
-    if(hadLocal) {
-      // We have local data — show the real app right away, sync quietly in background.
-      document.getElementById('onboarding').style.display = 'none';
-      document.getElementById('app').classList.add('visible');
-      init();
-      setSyncState('syncing');
-    } else {
-      // First load on this device with no local cache yet — show the boot spinner
-      // since there is genuinely nothing to render until Drive responds.
-      document.getElementById('onboarding').style.display = 'none';
-      document.getElementById('app').classList.add('visible');
-      document.getElementById('fab').style.display = 'none';
-      document.getElementById('section-content').innerHTML =
-        `<div id="boot-msg" style="text-align:center;padding:80px 20px;color:var(--text3);font-family:var(--serif);font-style:italic;font-size:18px">
-          <div style="margin-bottom:20px">Connecting to Drive…</div>
-          <div style="width:40px;height:40px;margin:0 auto;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:boot-spin 0.8s linear infinite"></div>
-        </div>
-        <style>@keyframes boot-spin{to{transform:rotate(360deg)}}</style>`;
-    }
+    document.getElementById('onboarding').style.display = 'none';
+    document.getElementById('app').classList.add('visible');
+    document.getElementById('fab').style.display = 'none';
+    document.getElementById('section-content').innerHTML =
+      `<div id="boot-msg" style="text-align:center;padding:80px 20px;color:var(--text3);font-family:var(--serif);font-style:italic;font-size:18px">
+        <div style="margin-bottom:20px">Connecting to Drive…</div>
+        <div style="width:40px;height:40px;margin:0 auto;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:boot-spin 0.8s linear infinite"></div>
+      </div>
+      <style>@keyframes boot-spin{to{transform:rotate(360deg)}}</style>`;
 
     // Reuse the cached access token directly if it hasn't expired yet — no Google round-trip needed
     const cachedToken = localStorage.getItem('raqib_token');
@@ -6927,26 +7066,16 @@ function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
     }
 
     if(gdriveToken) {
-      if(!hadLocal) {
-        const bm = document.getElementById('boot-msg');
-        if(bm) bm.querySelector('div').textContent = 'Loading your data…';
-      }
+      const bm = document.getElementById('boot-msg');
+      if(bm) bm.querySelector('div').textContent = 'Loading your data…';
       // Try migration from old flat file first
       const migrated = await migrateOldData();
       if(!migrated) {
         const loaded = await drivePull(true);
-        if(!loaded && !hadLocal) { DB.onboarded = true; }
+        if(!loaded) { DB.onboarded = true; }
       }
       driveReady = true;
-      saveLocalDB(); // persist whatever Drive merged in (pending days were preserved, see drivePull)
       init(); setSyncState('ok');
-      return;
-    }
-
-    if(hadLocal) {
-      // Couldn't reach Drive, but local data is already showing — just flag it and carry on offline.
-      driveReady = false;
-      setSyncState('offline');
       return;
     }
 
@@ -7002,9 +7131,31 @@ function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
 </div>
 
 <!-- AI Command Bar -->
+<!-- AI Chat Window -->
+<div id="ai-chat-window">
+  <div id="ai-chat-header">
+    <div id="ai-chat-header-left">
+      <div class="ai-chat-dot" id="ai-chat-dot"></div>
+      <div id="ai-chat-title">Groq · SaadOs AI</div>
+    </div>
+    <button id="ai-chat-close" onclick="aiChatClose()">✕</button>
+  </div>
+  <div id="ai-chat-messages">
+    <div class="ai-msg ai">
+      <div class="ai-msg-bubble">السلام عليكم! I'm your SaadOs assistant. You can ask me to log prayers, add tasks, track expenses — or just talk.</div>
+      <div class="ai-msg-time">now</div>
+    </div>
+  </div>
+  <div id="ai-chat-input-row">
+    <input id="ai-chat-input" type="text" placeholder="Ask me anything…" autocomplete="off" />
+    <button id="ai-chat-send" onclick="aiChatSend()">↑</button>
+  </div>
+</div>
+
 <div id="ai-toast"></div>
 <div id="ai-bar">
   <input id="ai-input" type="text" placeholder="Tell SaadOs anything… prayed all salawat in masjid, spent 50 MAD on lunch…" autocomplete="off" autocorrect="off" spellcheck="false" />
+  <button id="ai-chat-toggle" onclick="aiChatToggle()" title="Chat with AI">💬</button>
   <button id="ai-send-btn" onclick="aiRun()" title="Run">✦</button>
 </div>
 
@@ -7403,6 +7554,223 @@ async function aiRun() {
 // Enter key submits
 document.getElementById('ai-input').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); aiRun(); }
+});
+
+/* ════════════════════════════════════════════════
+   AI CHAT WINDOW
+════════════════════════════════════════════════ */
+
+const aiChatHistory = [];
+
+function aiChatToggle() {
+  const win = document.getElementById('ai-chat-window');
+  const btn = document.getElementById('ai-chat-toggle');
+  const isOpen = win.classList.contains('open');
+  if (isOpen) {
+    win.classList.remove('open');
+    btn.classList.remove('active');
+  } else {
+    win.classList.add('open');
+    btn.classList.add('active');
+    document.getElementById('ai-chat-input').focus();
+    aiChatScrollBottom();
+  }
+}
+
+function aiChatClose() {
+  document.getElementById('ai-chat-window').classList.remove('open');
+  document.getElementById('ai-chat-toggle').classList.remove('active');
+}
+
+function aiChatScrollBottom() {
+  const msgs = document.getElementById('ai-chat-messages');
+  setTimeout(() => { msgs.scrollTop = msgs.scrollHeight; }, 60);
+}
+
+function aiChatTime() {
+  return new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+}
+
+function aiChatAddMsg(role, text, type = '') {
+  const msgs = document.getElementById('ai-chat-messages');
+  const div = document.createElement('div');
+  div.className = `ai-msg ${role}${type ? ' ' + type : ''}`;
+  div.innerHTML = `
+    <div class="ai-msg-bubble">${text.replace(/\n/g, '<br>')}</div>
+    <div class="ai-msg-time">${aiChatTime()}</div>
+  `;
+  msgs.appendChild(div);
+  aiChatScrollBottom();
+  return div;
+}
+
+function aiChatShowThinking() {
+  const msgs = document.getElementById('ai-chat-messages');
+  const dot = document.getElementById('ai-chat-dot');
+  dot.className = 'ai-chat-dot thinking';
+  const div = document.createElement('div');
+  div.className = 'ai-msg ai';
+  div.id = 'ai-thinking-indicator';
+  div.innerHTML = `<div class="ai-thinking-bubble"><span></span><span></span><span></span></div>`;
+  msgs.appendChild(div);
+  aiChatScrollBottom();
+}
+
+function aiChatRemoveThinking() {
+  const el = document.getElementById('ai-thinking-indicator');
+  if (el) el.remove();
+  document.getElementById('ai-chat-dot').className = 'ai-chat-dot done';
+  setTimeout(() => {
+    document.getElementById('ai-chat-dot').className = 'ai-chat-dot';
+  }, 2000);
+}
+
+async function aiChatSend() {
+  const input = document.getElementById('ai-chat-input');
+  const btn   = document.getElementById('ai-chat-send');
+  const text  = input.value.trim();
+  if (!text) return;
+
+  if (GROQ_API_KEY === 'YOUR_GROQ_KEY_HERE') {
+    aiChatAddMsg('ai', '⚠ Add your Groq API key to the file first.', 'error');
+    return;
+  }
+
+  // Add user message to UI and history
+  aiChatAddMsg('user', text);
+  aiChatHistory.push({ role: 'user', content: text });
+  input.value = '';
+  btn.disabled = true;
+
+  // Show thinking indicator
+  aiChatShowThinking();
+
+  // Build context snapshot
+  const context = aiBuildContext();
+
+  const systemPrompt = `You are SaadOs AI — a warm, helpful personal assistant embedded in an Islamic productivity app. You speak in a natural, friendly tone. You can:
+1. Answer questions about the user's data (prayers, tasks, expenses, journal) — it's provided below.
+2. Update the app's data when asked — in that case, FIRST tell the user what you're about to do in plain language, THEN on the very last line output a JSON patch prefixed exactly with "ACTION:" and nothing else after it. Example last line: ACTION:{"days":{"${todayStr()}":{"prayers":{"fajr":{"location":"home","timing":"late"}}}}}
+3. Just have a conversation — talk about Islam, productivity, give advice, anything.
+
+If the user asks to update data, always confirm what you did in a friendly sentence BEFORE the ACTION line.
+If no data update is needed, just reply normally — no ACTION line at all.
+Keep responses concise (2-4 sentences max unless the user asks for detail).
+Greet in Arabic occasionally. Be warm and personal.
+
+USER'S CURRENT DATA:
+${JSON.stringify(context, null, 2)}
+
+SCHEMA REMINDER for ACTION patches:
+- Prayer location: "mosque" | "home" | "not_yet"
+- Prayer timing: "on_time" | "late" | "not_yet"
+- Tasks: full array replacement with objects {id, name, block, note, duration, pomSessions, done, createdAt}
+- Expenses: append to mal.expenses array with {id, amount, desc, date}
+- Niyyah: days[date].niyyah string
+- Journal text: days[date].journal.text string`;
+
+  try {
+    const messages = [
+      ...aiChatHistory.slice(-10), // keep last 10 turns for context
+    ];
+
+    const res = await fetch(GROQ_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'llama-3.3-70b-versatile',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...messages,
+        ],
+        temperature: 0.7,
+        max_tokens: 600,
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || data?.error) throw new Error(data?.error?.message || `HTTP ${res.status}`);
+
+    const raw = data?.choices?.[0]?.message?.content || '';
+
+    // Split response and ACTION patch
+    const actionIdx = raw.lastIndexOf('\nACTION:');
+    let displayText = raw.trim();
+    let actionPatch = null;
+
+    if (actionIdx !== -1) {
+      displayText  = raw.slice(0, actionIdx).trim();
+      const jsonStr = raw.slice(actionIdx + '\nACTION:'.length).trim();
+      try {
+        actionPatch = JSON.parse(jsonStr);
+      } catch(e) {
+        // Malformed action — ignore, just show the text
+      }
+    }
+
+    aiChatRemoveThinking();
+
+    // Show the AI's message
+    aiChatAddMsg('ai', displayText || '...');
+    aiChatHistory.push({ role: 'assistant', content: raw });
+
+    // Apply the patch if valid
+    if (actionPatch) {
+      const validationError = aiValidatePatch(actionPatch);
+      if (!validationError) {
+        // Apply patch (same logic as aiRun)
+        if (actionPatch.days) {
+          for (const [dateKey, dayPatch] of Object.entries(actionPatch.days)) {
+            const existingDay = getDay(dateKey);
+            if (dayPatch.tasks !== undefined) {
+              existingDay.tasks = dayPatch.tasks;
+              delete dayPatch.tasks;
+            }
+            if (dayPatch.journal?.images !== undefined) {
+              if (!existingDay.journal) existingDay.journal = {text:'',tags:[],images:[],videos:[]};
+              existingDay.journal.images = dayPatch.journal.images;
+              delete dayPatch.journal.images;
+              if (Object.keys(dayPatch.journal).length === 0) delete dayPatch.journal;
+            }
+            aiDeepMerge(existingDay, dayPatch);
+          }
+        }
+        if (actionPatch.mal) {
+          if (!DB.mal) DB.mal = { budget: 0, expenses: [] };
+          if (actionPatch.mal.budget !== undefined) DB.mal.budget = actionPatch.mal.budget;
+          if (actionPatch.mal.expenses) {
+            if (!Array.isArray(DB.mal.expenses)) DB.mal.expenses = [];
+            for (const exp of actionPatch.mal.expenses) {
+              if (exp.id && !DB.mal.expenses.find(e => e.id === exp.id)) {
+                DB.mal.expenses.push(exp);
+              }
+            }
+          }
+        }
+        markUnsaved();
+        renderSection();
+        aiChatAddMsg('ai', '✓ Done — your data has been updated.', 'action');
+      } else {
+        aiChatAddMsg('ai', `⚠ Couldn't apply the update: ${validationError}`, 'error');
+      }
+    }
+
+  } catch(err) {
+    aiChatRemoveThinking();
+    console.error('Chat error:', err);
+    aiChatAddMsg('ai', '✕ ' + (err.message || 'Something went wrong'), 'error');
+  } finally {
+    btn.disabled = false;
+    document.getElementById('ai-chat-input').focus();
+  }
+}
+
+// Enter key in chat input
+document.getElementById('ai-chat-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); aiChatSend(); }
 });
 </script>
 
