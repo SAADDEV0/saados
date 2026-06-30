@@ -4743,6 +4743,23 @@ async function generateReadTopics() {
   }
 }
 
+async function manualGenerateReadTopics() {
+  const btn = document.getElementById('read-gen-btn');
+  if (!btn || btn.disabled) return;
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Generating…';
+  try {
+    await generateReadTopics();
+    aiToast('✓ New articles added', 'ok');
+  } catch (e) {
+    aiToast('✕ Generation failed', 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
+
 function toggleReadCategory(id) {
   if (!DB.profile.readCategories) DB.profile.readCategories = [];
   const i = DB.profile.readCategories.indexOf(id);
@@ -7142,9 +7159,10 @@ function openSettings() {
         <button class="s-btn" style="width:auto;padding:0 16px" onclick="addReadCategory()">Add</button>
       </div>
       <div class="fl" style="margin-bottom:8px">Depth</div>
-      <div class="filter-row">
+      <div class="filter-row" style="margin-bottom:18px">
         ${READ_DEPTHS.map(d=>`<div class="fc ${(DB.profile.readDepth||'standard')===d.id?'on':''}" onclick="setReadDepth('${d.id}')">${d.en} · ${d.sub}</div>`).join('')}
       </div>
+      <button class="s-btn" id="read-gen-btn" onclick="manualGenerateReadTopics()">✦ Generate New Articles</button>
     </div>`;
   document.getElementById('settings-bg').classList.add('open');
 }
