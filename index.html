@@ -3246,6 +3246,7 @@ const NAV = [
   { id:'niyyah',    en:'Niyyah',    ar:'نيّة',    icon:'✦' },
   { id:'salat',     en:'Salat',     ar:'صلاة',    icon:'☽' },
   { id:'amal',      en:'Amal',      ar:'عمل',     icon:'◈' },
+  { id:'read',      en:'Read',      ar:'قراءة',   icon:'📖' },
   { id:'muhasabah', en:'Sijjil',    ar:'سجلّ',    icon:'✎' },
   { id:'mizan',     en:'Mizan',     ar:'ميزان',   icon:'⚖' },
   { id:'mal',       en:'Māl',       ar:'مال',     icon:'◎' },
@@ -3270,6 +3271,21 @@ const CATEGORIES = [
   { id:'jism',   en:'Jism',   ar:'جسم',   color:'#2d5a3d' },
   { id:'ruh',    en:'Ruh',    ar:'روح',   color:'#5a3a7a' },
   { id:'dunya',  en:'Dunya',  ar:'دنيا',  color:'#7a5020' },
+];
+
+const READ_CATEGORIES = [
+  { id:'finance',          en:'Finance & Banking' },
+  { id:'history',          en:'History' },
+  { id:'health',           en:'Human Body & Health' },
+  { id:'psychology',       en:'Psychology' },
+  { id:'science',          en:'Science' },
+  { id:'philosophy',       en:'Philosophy' },
+  { id:'how-things-work',  en:'How Things Really Work' },
+];
+const READ_DEPTHS = [
+  { id:'quick',    en:'Quick',    sub:'~5 min',  words:'500–700 words (about a 5 minute read)' },
+  { id:'standard', en:'Standard', sub:'~15 min', words:'1,500–2,000 words (about a 15 minute read)' },
+  { id:'deep',     en:'Deep',     sub:'~30 min', words:'3,000–4,000 words (about a 30 minute read)' },
 ];
 
 const DEFAULT_WIRD = [
@@ -3300,11 +3316,13 @@ const TIMEZONES = [
 ════════════════════════════════════════════════ */
 const HARDCODED_CID = '111426887413-md2gvq2djc7p7qqgp57p5v0s1eichp8b.apps.googleusercontent.com';
 let DB = {
-  profile: { name:'', theme:'light', fontSize:'medium', timezone:'Africa/Casablanca' },
+  profile: { name:'', theme:'light', fontSize:'medium', timezone:'Africa/Casablanca',
+    readCategories: READ_CATEGORIES.map(c=>c.id), readCustomCategories: [], readDepth: 'standard' },
   days: {}, practices: [], wird: JSON.parse(JSON.stringify(DEFAULT_WIRD)),
   gdrive: { connected:false, clientId:HARDCODED_CID, lastSync:null },
   onboarded: false,
   mal: { budget: 0, expenses: [] },
+  readQueue: [],
 };
 let currentSection = 'niyyah';
 let mizanPeriod = 'today'; // 'today' | '7d' | '30d' | '365d'
@@ -3722,7 +3740,7 @@ function shiftDay(n) {
 }
 function goToday() { currentDate=todayStr(); renderHero(); renderSection(); }
 function getDay(s) {
-  if(!DB.days[s]) DB.days[s]={ niyyah:'', tasks:[], prayers:{}, practicesDone:{}, wirdCounts:{}, focusTime:{}, totalFocusSec:0, journal:{text:'',tags:[],images:[],videos:[]}, nawafil:[] };
+  if(!DB.days[s]) DB.days[s]={ niyyah:'', tasks:[], prayers:{}, practicesDone:{}, wirdCounts:{}, focusTime:{}, totalFocusSec:0, journal:{text:'',tags:[],images:[],videos:[]}, nawafil:[], readTopic:null };
   const d = DB.days[s];
   if(!d.nawafil) d.nawafil = [];
   if(!d.journal) d.journal = {text:'',tags:[],images:[],videos:[]};
@@ -3862,6 +3880,7 @@ function renderSection() {
     case 'niyyah':    renderNiyyah(el); break;
     case 'salat':     renderSalat(el);  break;
     case 'amal':      renderAmal(el);   break;
+    case 'read':      renderRead(el);   break;
     case 'muhasabah': renderMuhasabah(el); break;
     case 'mizan':     renderMizan(el);  break;
     case 'mal':       renderMal(el);    break;
@@ -4558,6 +4577,201 @@ function setAmalF(f) { amalF=f; renderSection(); }
 function togglePractice(id) { const d=getDay(currentDate); if(!d.practicesDone) d.practicesDone={}; d.practicesDone[id]=!d.practicesDone[id]; markUnsaved(); renderSection(); }
 function delPractice(id) { if(!confirm('Remove this practice?')) return; DB.practices=DB.practices.filter(p=>p.id!==id); markUnsaved(); renderSection(); }
 function getPracticeStreak(id) { let s=0; const t=new Date(currentDate+'T12:00:00'); for(let i=0;i<365;i++){const d=new Date(t);d.setDate(d.getDate()-i);const ds=d.toISOString().split('T')[0];const dd=getDayRO(ds);if(dd?.practicesDone?.[id]) s++;else if(i>0) break;} return s; }
+
+/* ════════════════════════════════════════════════
+   READ — daily reading habit, topics queued via Groq
+════════════════════════════════════════════════ */
+let readShowDoneForm = false;
+let _readGenInFlight = false;
+
+function getAllReadCategories() {
+  return READ_CATEGORIES.concat(DB.profile.readCustomCategories || []);
+}
+
+function renderRead(el) {
+  ensureTodayReadTopic();
+  const ds = todayStr();
+  const day = getDay(ds);
+  const topic = day.readTopic;
+  const streak = getReadStreak();
+
+  let h = `<div class="s-head">
+    <div class="s-kicker">Daily Reading</div>
+    <div class="s-title">Read</div>
+    <div class="s-sub">One new idea a day</div>
+  </div>`;
+
+  if (streak > 0) {
+    h += `<div class="prac-streak" style="font-size:13px;margin-bottom:18px">🔥 ${streak}-day reading streak</div>`;
+  }
+
+  if (!topic) {
+    h += `<div style="text-align:center;padding:60px 0;font-family:var(--serif);font-style:italic;font-size:16px;color:var(--ink4)">
+      Preparing today's topic…<br><span style="font-size:12px;font-style:normal">Check back in a moment.</span>
+    </div>`;
+  } else {
+    const catLabel = (getAllReadCategories().find(c => c.id === topic.category) || { en: topic.category }).en;
+    h += `<span class="prac-tag" style="display:inline-block;margin-bottom:12px">${esc(catLabel || '')}</span>
+    <div style="font-family:var(--serif);font-size:28px;font-weight:500;line-height:1.25;margin-bottom:18px;color:var(--text)">${esc(topic.title)}</div>
+    <div style="font-size:15px;line-height:1.85;color:var(--text2);white-space:pre-wrap;margin-bottom:28px">${esc(topic.content)}</div>`;
+
+    if (topic.done) {
+      h += `<div class="drive-status-pill"><div class="ds-dot g"></div>Done for today${topic.reaction ? ` — "${esc(topic.reaction)}"` : ''}</div>`;
+    } else if (readShowDoneForm) {
+      h += `<div class="fg"><label class="fl">One sentence — what stuck with you?</label>
+        <input type="text" class="fi" id="read-reaction" placeholder="Optional…" /></div>
+      <div style="display:flex;gap:10px">
+        <button class="s-btn" onclick="submitReadDone(true)">Skip</button>
+        <button class="submit-btn" style="margin:0" onclick="submitReadDone(false)">Save</button>
+      </div>`;
+    } else {
+      h += `<button class="submit-btn" onclick="readShowDoneForm=true;renderSection()">✓ Done Reading</button>`;
+    }
+  }
+
+  el.innerHTML = h;
+}
+
+function ensureTodayReadTopic() {
+  const ds = todayStr();
+  const day = getDay(ds);
+  if (!day.readTopic) {
+    if (DB.readQueue && DB.readQueue.length > 0) {
+      const next = DB.readQueue.shift();
+      day.readTopic = { title: next.title, content: next.content, category: next.category, depth: next.depth, done: false, reaction: null };
+      markUnsaved();
+    }
+  }
+  if (!DB.readQueue) DB.readQueue = [];
+  if (DB.readQueue.length <= 2) generateReadTopics();
+}
+
+function getReadStreak() {
+  let s = 0; const t = new Date(currentDate + 'T12:00:00');
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(t); d.setDate(d.getDate() - i);
+    const ds = d.toISOString().split('T')[0];
+    const dd = getDayRO(ds);
+    if (dd?.readTopic?.done) s++; else if (i > 0) break;
+  }
+  return s;
+}
+
+function submitReadDone(skip) {
+  const ds = todayStr();
+  const day = getDay(ds);
+  if (!day.readTopic) return;
+  const reactionInput = document.getElementById('read-reaction');
+  const reaction = (!skip && reactionInput) ? reactionInput.value.trim() : '';
+  day.readTopic.done = true;
+  day.readTopic.reaction = reaction || null;
+  readShowDoneForm = false;
+
+  let block = `📖 Topic of the day: ${day.readTopic.title}`;
+  if (reaction) block += `\n${reaction}`;
+  appendToSijjil(ds, block);
+
+  markUnsaved();
+  renderSection();
+}
+
+// Appends a block to the given day's Sijjil entry without disturbing existing text.
+function appendToSijjil(ds, block) {
+  const day = getDay(ds);
+  if (!day.journal) day.journal = { text: '', tags: [], images: [], videos: [] };
+  const existing = (day.journal.text || '').trim();
+  day.journal.text = existing ? existing + '\n\n' + block : block;
+}
+
+function last30ReadTitles() {
+  const titles = [];
+  const t = new Date(currentDate + 'T12:00:00');
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(t); d.setDate(d.getDate() - i);
+    const ds = d.toISOString().split('T')[0];
+    const title = DB.days[ds]?.readTopic?.title;
+    if (title) titles.push(title);
+  }
+  return titles;
+}
+
+// Background-only: pulls more topics from Groq when the queue runs low.
+// Fully separate context from the command/chat AI — only read prefs + titles, nothing else.
+async function generateReadTopics() {
+  if (_readGenInFlight) return;
+  _readGenInFlight = true;
+  try {
+    const allCats = getAllReadCategories();
+    const enabledIds = (DB.profile.readCategories && DB.profile.readCategories.length)
+      ? DB.profile.readCategories
+      : allCats.map(c => c.id);
+    const catNames = enabledIds.map(id => (allCats.find(c => c.id === id) || { en: id }).en);
+    const depthId = DB.profile.readDepth || 'standard';
+    const depthInfo = READ_DEPTHS.find(d => d.id === depthId) || READ_DEPTHS[1];
+
+    const recentTitles = last30ReadTitles();
+    const queueTitles = (DB.readQueue || []).map(t => t.title);
+    const avoidTitles = [...recentTitles, ...queueTitles];
+
+    const prompt = `Generate 10 new short articles for a daily reading habit app. Categories to draw from: ${catNames.join(', ')}. Target length: ${depthInfo.words}. Do not repeat or closely resemble any of these already-used or queued titles: ${avoidTitles.length ? avoidTitles.join('; ') : '(none yet)'}. Return as a JSON array of objects, each with title, content, and category. Return ONLY the JSON array — no preamble, no markdown code fences.`;
+
+    const raw = await aiCallGroq(
+      'You are a content generator for a daily-reading habit app. Always respond with a valid JSON array only, nothing else.',
+      prompt
+    );
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const arr = JSON.parse(clean);
+
+    if (Array.isArray(arr)) {
+      arr.forEach(item => {
+        if (item && item.title && item.content) {
+          const catId = allCats.find(c => c.en === item.category)?.id || enabledIds[0] || 'science';
+          DB.readQueue.push({ title: item.title, content: item.content, category: catId, depth: depthId });
+        }
+      });
+      markUnsaved();
+      // If the read tab is open and still waiting on a topic, fill it in now.
+      if (currentSection === 'read') {
+        const ds = todayStr();
+        if (!getDay(ds).readTopic && DB.readQueue.length > 0) renderSection();
+      }
+    }
+  } catch (e) {
+    console.warn('Read topic generation failed:', e.message);
+  } finally {
+    _readGenInFlight = false;
+  }
+}
+
+function toggleReadCategory(id) {
+  if (!DB.profile.readCategories) DB.profile.readCategories = [];
+  const i = DB.profile.readCategories.indexOf(id);
+  if (i > -1) DB.profile.readCategories.splice(i, 1); else DB.profile.readCategories.push(id);
+  markUnsaved();
+  openSettings();
+}
+
+function addReadCategory() {
+  const inp = document.getElementById('read-new-cat');
+  const val = (inp?.value || '').trim();
+  if (!val) return;
+  const id = 'custom-' + val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  if (!id || id === 'custom-') return;
+  if (!DB.profile.readCustomCategories) DB.profile.readCustomCategories = [];
+  if (!DB.profile.readCustomCategories.find(c => c.id === id)) {
+    DB.profile.readCustomCategories.push({ id, en: val });
+  }
+  if (!DB.profile.readCategories) DB.profile.readCategories = [];
+  if (!DB.profile.readCategories.includes(id)) DB.profile.readCategories.push(id);
+  markUnsaved();
+  openSettings();
+}
+
+function setReadDepth(d) {
+  DB.profile.readDepth = d;
+  markUnsaved();
+  openSettings();
+}
 function get28Day(id) { const r=[]; const t=new Date(currentDate+'T12:00:00'); for(let i=27;i>=0;i--){const d=new Date(t);d.setDate(d.getDate()-i);const ds=d.toISOString().split('T')[0];r.push(!!(getDayRO(ds)?.practicesDone?.[id]));} return r; }
 function incrWird(id) {
   const d=getDay(currentDate); if(!d.wirdCounts) d.wirdCounts={};
@@ -6916,6 +7130,21 @@ function openSettings() {
         </select>
       </div>
       <button class="s-btn danger" onclick="disableReminders()">Turn off reminders</button>`}
+    </div>
+    <div class="s-section">
+      <div class="s-section-title">Read Topics</div>
+      <div class="fl" style="margin-bottom:8px">Categories</div>
+      <div class="filter-row" style="margin-bottom:14px">
+        ${getAllReadCategories().map(c=>`<div class="fc ${(DB.profile.readCategories||[]).includes(c.id)?'on':''}" onclick="toggleReadCategory('${c.id}')">${esc(c.en)}</div>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:18px">
+        <input type="text" class="fi" id="read-new-cat" placeholder="Add custom category…" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addReadCategory();}" />
+        <button class="s-btn" style="width:auto;padding:0 16px" onclick="addReadCategory()">Add</button>
+      </div>
+      <div class="fl" style="margin-bottom:8px">Depth</div>
+      <div class="filter-row">
+        ${READ_DEPTHS.map(d=>`<div class="fc ${(DB.profile.readDepth||'standard')===d.id?'on':''}" onclick="setReadDepth('${d.id}')">${d.en} · ${d.sub}</div>`).join('')}
+      </div>
     </div>`;
   document.getElementById('settings-bg').classList.add('open');
 }
