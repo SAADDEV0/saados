@@ -4710,6 +4710,40 @@ function last30ReadTitles() {
 // Fully separate context from the command/chat AI — only read prefs + titles, nothing else.
 // opts can override the saved profile prefs for a single manual generation,
 // e.g. { categoryIds: ['science'], depthId: 'quick' }, without touching DB.profile.
+
+// Best-effort recovery when the model's JSON didn't parse cleanly — usually
+// because the response got cut off at the token limit partway through the
+// "content" string, or has a stray unescaped quote. Pulls title/content/category
+// out with regex instead of giving up and forcing the user to retry.
+function salvageArticleJson(raw) {
+  if (!raw) return null;
+  let text = raw.replace(/```json|```/gi, '').trim();
+
+  const titleMatch = text.match(/"title"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  const categoryMatch = text.match(/"category"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  // Content is the trickiest: grab everything between "content": " and either
+  // the next ',"category"' / closing '"}' or, if truncated, just the rest of the string.
+  const contentMatch = text.match(/"content"\s*:\s*"((?:[^"\\]|\\.)*)/);
+
+  if (!titleMatch || !contentMatch) return null;
+
+  const unescape = s => s.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+
+  let content = contentMatch[1];
+  // If the match ran to the end of input unterminated (truncated response),
+  // trim any half-finished trailing sentence/word so it doesn't end abruptly.
+  if (!text.slice(contentMatch.index + contentMatch[0].length).trim().startsWith('"')) {
+    const lastBreak = Math.max(content.lastIndexOf('. '), content.lastIndexOf('\\n\\n'));
+    if (lastBreak > content.length * 0.5) content = content.slice(0, lastBreak + 1);
+  }
+
+  return {
+    title: unescape(titleMatch[1]),
+    content: unescape(content),
+    category: categoryMatch ? unescape(categoryMatch[1]) : undefined,
+  };
+}
+
 async function generateReadTopics(opts) {
   if (_readGenInFlight) return { success: false, count: 0, error: 'Already generating' };
   _readGenInFlight = true;
@@ -4733,25 +4767,34 @@ async function generateReadTopics(opts) {
 
     const prompt = `Write one short article for a daily reading habit app, in the category "${category}". Target length: ${depthInfo.words}. Do not repeat or closely resemble any of these already-used or queued titles: ${avoidTitles.length ? avoidTitles.join('; ') : '(none yet)'}. Formatting rules for the "content" field: write in clear, well-structured prose broken into short paragraphs separated by a blank line (\\n\\n); for articles longer than ~800 words, add a few short "## Subheading" lines to break up sections; do not use bullet points or numbered lists; use **bold** sparingly only for genuinely key terms. Return ONLY a single JSON object with exactly these keys: title, content, category. No preamble, no markdown code fences, no extra text before or after the JSON.`;
 
+    // Token budget must scale with the requested word count, or long ("deep")
+    // articles get cut off mid-JSON and fail to parse. ~1.6 tokens/word for
+    // English prose, plus headroom for JSON punctuation/escaping and the title.
+    const depthTokenBudget = { quick: 1800, standard: 4500, deep: 8000 };
+    const maxTokens = depthTokenBudget[depthId] || 4500;
+
     const raw = await aiCallGroq(
       'You are a content generator for a daily-reading habit app. Always respond with a single valid JSON object only, nothing else.',
       prompt,
-      4000
+      maxTokens
     );
 
     // Strip code fences and grab the outermost {...} in case the model adds stray text.
     let clean = raw.replace(/```json|```/gi, '').trim();
     const first = clean.indexOf('{');
+    if (first !== -1) clean = clean.slice(first);
     const last = clean.lastIndexOf('}');
-    if (first !== -1 && last !== -1 && last > first) {
-      clean = clean.slice(first, last + 1);
-    }
+    if (last !== -1) clean = clean.slice(0, last + 1);
 
     let item;
     try {
       item = JSON.parse(clean);
     } catch (parseErr) {
-      throw new Error('AI returned invalid format — try again');
+      // Response was likely truncated (hit the token limit) before the closing
+      // brace, or has a dangling comma/quote. Try to salvage title + content
+      // directly with regex instead of failing the whole generation.
+      item = salvageArticleJson(raw);
+      if (!item) throw new Error('AI returned invalid format — try again');
     }
 
     if (!item || !item.title || !item.content) {
