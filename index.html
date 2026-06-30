@@ -109,7 +109,7 @@ body {
 ────────────────────────────────────────────── */
 #ai-bar {
   position: fixed;
-  bottom: calc(var(--nav-h) + 12px);
+  bottom: calc(var(--nav-h) + 28px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 799;
@@ -7307,6 +7307,15 @@ function aiToast(msg, type = '') {
   _aiToastTimer = setTimeout(() => { el.className = ''; }, type === 'err' ? 4000 : 2800);
 }
 
+// ── Toast with an Undo action — stays up longer, has a tappable button ──
+function aiToastWithUndo(msg) {
+  const el = document.getElementById('ai-toast');
+  el.innerHTML = `${msg} <button onclick="aiUndo()" style="margin-left:8px;background:rgba(255,255,255,0.25);border:none;color:inherit;border-radius:20px;padding:2px 10px;font-size:11px;cursor:pointer;font-weight:600">Undo</button>`;
+  el.className = 'show ai-ok';
+  clearTimeout(_aiToastTimer);
+  _aiToastTimer = setTimeout(() => { el.className = ''; }, 10000);
+}
+
 // ── Deep merge — only overwrites, never deletes ──
 function aiDeepMerge(target, patch) {
   for (const key of Object.keys(patch)) {
@@ -7614,7 +7623,72 @@ async function aiCallGroq(systemPrompt, userMessage) {
 
 // ── Main AI run function ──
 // ── Apply a validated patch safely to DB (shared by aiRun and aiChatSend) ──
+// ── Undo support: snapshot only the slices a patch is about to touch ──
+let _aiLastSnapshot = null;
+let _aiUndoTimer = null;
+
+function aiSnapshotForPatch(patch) {
+  const snap = {};
+  if (patch.days) {
+    snap.days = {};
+    for (const dateKey of Object.keys(patch.days)) {
+      // Deep clone existing day (or null if it didn't exist yet)
+      snap.days[dateKey] = DB.days[dateKey] ? JSON.parse(JSON.stringify(DB.days[dateKey])) : null;
+    }
+  }
+  if (patch.mal) {
+    snap.mal = DB.mal ? JSON.parse(JSON.stringify(DB.mal)) : null;
+  }
+  if (patch.wird) {
+    snap.wird = JSON.parse(JSON.stringify(DB.wird));
+  }
+  if (patch.practices) {
+    snap.practices = JSON.parse(JSON.stringify(DB.practices));
+  }
+  if (patch.profile) {
+    snap.profile = DB.profile ? JSON.parse(JSON.stringify(DB.profile)) : null;
+  }
+  return snap;
+}
+
+function aiUndo() {
+  if (!_aiLastSnapshot) return;
+  const snap = _aiLastSnapshot;
+
+  if (snap.days) {
+    for (const [dateKey, dayData] of Object.entries(snap.days)) {
+      if (dayData === null) {
+        delete DB.days[dateKey]; // day didn't exist before the patch
+      } else {
+        DB.days[dateKey] = dayData;
+      }
+    }
+  }
+  if (snap.mal !== undefined)       DB.mal       = snap.mal;
+  if (snap.wird !== undefined)      DB.wird      = snap.wird;
+  if (snap.practices !== undefined) DB.practices = snap.practices;
+  if (snap.profile !== undefined && snap.profile) {
+    DB.profile = snap.profile;
+    if (DB.profile.theme) applyTheme(DB.profile.theme);
+  }
+
+  _aiLastSnapshot = null;
+  clearTimeout(_aiUndoTimer);
+  markUnsaved();
+  renderSection();
+  aiToast('Undone ✓', 'ok');
+
+  // reflect in chat too if it's open
+  const msgs = document.getElementById('ai-chat-messages');
+  if (msgs) aiChatAddMsg('ai', '↶ Reverted the last change.', 'action');
+}
+
 function aiApplyPatch(patch) {
+  // Capture undo snapshot BEFORE any mutation
+  _aiLastSnapshot = aiSnapshotForPatch(patch);
+  clearTimeout(_aiUndoTimer);
+  _aiUndoTimer = setTimeout(() => { _aiLastSnapshot = null; }, 30000); // undo window: 30s
+
   if (patch.days) {
     for (const [dateKey, dayPatch] of Object.entries(patch.days)) {
       const existingDay = getDay(dateKey);
@@ -7725,7 +7799,7 @@ async function aiRun() {
     renderSection();
 
     input.value = '';
-    aiToast('Done ✓', 'ok');
+    aiToastWithUndo('Done ✓');
 
   } catch (err) {
     console.error('AI command error:', err);
@@ -7925,7 +7999,7 @@ NEVER invent a wird or practice id — only use ids already present in context.w
         aiApplyPatch(actionPatch);
         markUnsaved();
         renderSection();
-        aiChatAddMsg('ai', '✓ Done — your data has been updated.', 'action');
+        aiChatAddMsg('ai', '✓ Done — your data has been updated. <button onclick="aiUndo()" style="margin-left:6px;background:var(--green);border:none;color:#fff;border-radius:20px;padding:3px 11px;font-size:11px;cursor:pointer;font-weight:600;font-family:var(--sans)">Undo</button>', 'action');
       } else {
         aiChatAddMsg('ai', `⚠ Couldn't apply the update: ${validationError}`, 'error');
       }
