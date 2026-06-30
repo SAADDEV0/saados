@@ -3328,7 +3328,7 @@ const TIMEZONES = [
 const HARDCODED_CID = '111426887413-md2gvq2djc7p7qqgp57p5v0s1eichp8b.apps.googleusercontent.com';
 let DB = {
   profile: { name:'', theme:'light', fontSize:'medium', timezone:'Africa/Casablanca',
-    readCategories: READ_CATEGORIES.map(c=>c.id), readCustomCategories: [], readDepth: 'standard' },
+    readCategories: [], readCustomCategories: [], readDepth: 'standard' },
   days: {}, practices: [], wird: JSON.parse(JSON.stringify(DEFAULT_WIRD)),
   gdrive: { connected:false, clientId:HARDCODED_CID, lastSync:null },
   onboarded: false,
@@ -4845,19 +4845,22 @@ async function manualGenerateReadTopics(opts) {
 
 // Opens a picker modal so nothing gets generated until the user explicitly
 // confirms which categories + length they want for this article.
-function openGenerateArticleModal() {
+// keepSelected / keepDepth let us re-render after adding a custom category
+// without losing whatever the user had already picked.
+function openGenerateArticleModal(keepSelected, keepDepth) {
   const allCats = getAllReadCategories();
-  const preselected = (DB.profile.readCategories && DB.profile.readCategories.length)
-    ? DB.profile.readCategories
-    : allCats.map(c => c.id);
-  const depthId = DB.profile.readDepth || 'standard';
+  const depthId = keepDepth || DB.profile.readDepth || 'standard';
 
   document.getElementById('modal-content').innerHTML = `
     <div class="modal-title">Generate a new article</div>
     <div class="fg">
       <label class="fl">Categories</label>
       <div class="filter-row" id="gen-art-cats">
-        ${allCats.map(c => `<div class="fc ${preselected.includes(c.id) ? 'on' : ''}" data-id="${esc(c.id)}" onclick="this.classList.toggle('on')">${esc(c.en)}</div>`).join('')}
+        ${allCats.map(c => `<div class="fc ${keepSelected && keepSelected.includes(c.id) ? 'on' : ''}" data-id="${esc(c.id)}" onclick="this.classList.toggle('on')">${esc(c.en)}</div>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <input type="text" class="fi" id="gen-art-new-cat" placeholder="Add custom category…" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addReadCategoryInModal();}" />
+        <button class="s-btn" style="width:auto;padding:0 16px" onclick="addReadCategoryInModal()">Add</button>
       </div>
     </div>
     <div class="fg">
@@ -4873,6 +4876,27 @@ function openGenerateArticleModal() {
   document.getElementById('modal-bg').classList.add('open');
 }
 
+// Adds a custom category, then re-renders the modal with it selected,
+// preserving anything else the user had already picked.
+function addReadCategoryInModal() {
+  const inp = document.getElementById('gen-art-new-cat');
+  const val = (inp?.value || '').trim();
+  if (!val) return;
+  const id = 'custom-' + val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  if (!id || id === 'custom-') return;
+  if (!DB.profile.readCustomCategories) DB.profile.readCustomCategories = [];
+  if (!DB.profile.readCustomCategories.find(c => c.id === id)) {
+    DB.profile.readCustomCategories.push({ id, en: val });
+  }
+  markUnsaved();
+
+  const selected = Array.from(document.querySelectorAll('#gen-art-cats .fc.on')).map(e => e.dataset.id);
+  selected.push(id);
+  const depthEl = document.querySelector('#gen-art-depth .fc.on');
+  const depthId = depthEl ? depthEl.dataset.id : (DB.profile.readDepth || 'standard');
+  openGenerateArticleModal(selected, depthId);
+}
+
 async function submitGenerateArticle() {
   const catIds = Array.from(document.querySelectorAll('#gen-art-cats .fc.on')).map(e => e.dataset.id);
   if (!catIds.length) { aiToast('✕ Pick at least one category', 'err'); return; }
@@ -4885,6 +4909,11 @@ async function submitGenerateArticle() {
   try {
     const result = await generateReadTopics({ categoryIds: catIds, depthId });
     if (result && result.success) {
+      // Remember this pick so the avoid-titles / category-of-last-resort logic
+      // elsewhere has something sensible, but it's never used to preselect the modal.
+      DB.profile.readCategories = catIds;
+      DB.profile.readDepth = depthId;
+      markUnsaved();
       closeModal();
       aiToast(`✓ ${result.count} new article${result.count === 1 ? '' : 's'} added`, 'ok');
       if (currentSection === 'read') {
@@ -4900,30 +4929,6 @@ async function submitGenerateArticle() {
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = originalText; }
   }
-}
-
-function toggleReadCategory(id) {
-  if (!DB.profile.readCategories) DB.profile.readCategories = [];
-  const i = DB.profile.readCategories.indexOf(id);
-  if (i > -1) DB.profile.readCategories.splice(i, 1); else DB.profile.readCategories.push(id);
-  markUnsaved();
-  openSettings();
-}
-
-function addReadCategory() {
-  const inp = document.getElementById('read-new-cat');
-  const val = (inp?.value || '').trim();
-  if (!val) return;
-  const id = 'custom-' + val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-  if (!id || id === 'custom-') return;
-  if (!DB.profile.readCustomCategories) DB.profile.readCustomCategories = [];
-  if (!DB.profile.readCustomCategories.find(c => c.id === id)) {
-    DB.profile.readCustomCategories.push({ id, en: val });
-  }
-  if (!DB.profile.readCategories) DB.profile.readCategories = [];
-  if (!DB.profile.readCategories.includes(id)) DB.profile.readCategories.push(id);
-  markUnsaved();
-  openSettings();
 }
 
 function setReadDepth(d) {
@@ -7292,14 +7297,6 @@ function openSettings() {
     </div>
     <div class="s-section">
       <div class="s-section-title">Read Topics</div>
-      <div class="fl" style="margin-bottom:8px">Categories</div>
-      <div class="filter-row" style="margin-bottom:14px">
-        ${getAllReadCategories().map(c=>`<div class="fc ${(DB.profile.readCategories||[]).includes(c.id)?'on':''}" onclick="toggleReadCategory('${c.id}')">${esc(c.en)}</div>`).join('')}
-      </div>
-      <div style="display:flex;gap:8px;margin-bottom:18px">
-        <input type="text" class="fi" id="read-new-cat" placeholder="Add custom category…" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addReadCategory();}" />
-        <button class="s-btn" style="width:auto;padding:0 16px" onclick="addReadCategory()">Add</button>
-      </div>
       <div class="fl" style="margin-bottom:8px">Depth</div>
       <div class="filter-row" style="margin-bottom:18px">
         ${READ_DEPTHS.map(d=>`<div class="fc ${(DB.profile.readDepth||'standard')===d.id?'on':''}" onclick="setReadDepth('${d.id}')">${d.en} · ${d.sub}</div>`).join('')}
