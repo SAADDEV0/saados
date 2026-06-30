@@ -7329,7 +7329,8 @@ function aiValidatePatch(patch) {
 
   for (const key of Object.keys(patch)) {
     if (!AI_ALLOWED_KEYS.has(key)) {
-      return `Unknown top-level key: "${key}"`;
+      delete patch[key];
+      continue;
     }
 
     if (key === 'days') {
@@ -7341,7 +7342,7 @@ function aiValidatePatch(patch) {
         const dayPatch = days[dateKey];
         if (typeof dayPatch !== 'object' || Array.isArray(dayPatch)) return 'day entry must be an object';
         for (const dk of Object.keys(dayPatch)) {
-          if (!AI_DAY_KEYS.has(dk)) return `Unknown day key: "${dk}"`;
+          if (!AI_DAY_KEYS.has(dk)) delete dayPatch[dk];
         }
         // Validate prayers
         if (dayPatch.prayers) {
@@ -7365,17 +7366,86 @@ function aiValidatePatch(patch) {
           if (typeof dayPatch.journal !== 'object') return 'journal must be an object';
           if (dayPatch.journal.images !== undefined && !Array.isArray(dayPatch.journal.images)) return 'journal.images must be an array';
         }
+        // Validate wirdCounts — must reference real wird IDs, values must be numbers
+        if (dayPatch.wirdCounts !== undefined) {
+          if (typeof dayPatch.wirdCounts !== 'object' || Array.isArray(dayPatch.wirdCounts)) return 'wirdCounts must be an object';
+          const validWirdIds = new Set(DB.wird.map(w => w.id));
+          for (const [wid, val] of Object.entries(dayPatch.wirdCounts)) {
+            if (!validWirdIds.has(wid)) return `Unknown wird id: "${wid}"`;
+            if (typeof val !== 'number' || val < 0) return `Invalid wird count for "${wid}"`;
+          }
+        }
+        // Validate practicesDone — must reference real practice IDs, values must be boolean
+        if (dayPatch.practicesDone !== undefined) {
+          if (typeof dayPatch.practicesDone !== 'object' || Array.isArray(dayPatch.practicesDone)) return 'practicesDone must be an object';
+          const validPracticeIds = new Set(DB.practices.map(p => p.id));
+          for (const [pid, val] of Object.entries(dayPatch.practicesDone)) {
+            if (!validPracticeIds.has(pid)) return `Unknown practice id: "${pid}"`;
+            if (typeof val !== 'boolean') return `practicesDone value for "${pid}" must be true/false`;
+          }
+        }
+        // Validate nawafil array
+        if (dayPatch.nawafil !== undefined) {
+          if (!Array.isArray(dayPatch.nawafil)) return 'nawafil must be an array';
+          for (const nf of dayPatch.nawafil) {
+            if (typeof nf !== 'object' || !nf.name) return 'each nafl must have a name';
+          }
+        }
       }
     }
 
     if (key === 'mal') {
       const mal = patch.mal;
       if (typeof mal !== 'object' || Array.isArray(mal)) return 'mal must be an object';
-      const malKeys = new Set(['budget', 'expenses']);
       for (const mk of Object.keys(mal)) {
-        if (!malKeys.has(mk)) return `Unknown mal key: "${mk}"`;
+        if (!['budget', 'expenses'].includes(mk)) {
+          // silently strip unknown mal keys instead of rejecting
+          delete mal[mk];
+        }
       }
       if (mal.expenses !== undefined && !Array.isArray(mal.expenses)) return 'mal.expenses must be an array';
+    }
+
+    // Validate wird — must be a full array, can't be empty if existing items exist
+    if (key === 'wird') {
+      if (!Array.isArray(patch.wird)) return 'wird must be an array';
+      if (DB.wird.length > 0 && patch.wird.length === 0) return 'Refused: wird array would be emptied — must include existing items';
+      for (const w of patch.wird) {
+        if (typeof w !== 'object' || !w.id || !w.en) return 'each wird item must have id and en';
+        if (typeof w.target !== 'number' || w.target <= 0) return `Invalid wird target for "${w.id}"`;
+      }
+      // Safety: every existing wird id not mentioned in the new array must still be present unless explicitly being deleted (allow shrink by 1 max per call)
+      const oldIds = DB.wird.map(w => w.id);
+      const newIds = patch.wird.map(w => w.id);
+      const removed = oldIds.filter(id => !newIds.includes(id));
+      if (removed.length > 1) return `Refused: trying to remove ${removed.length} wird items at once — only 1 deletion allowed per command`;
+    }
+
+    // Validate practices — same safety logic
+    if (key === 'practices') {
+      if (!Array.isArray(patch.practices)) return 'practices must be an array';
+      if (DB.practices.length > 0 && patch.practices.length === 0) return 'Refused: practices array would be emptied — must include existing items';
+      const validCategories = new Set(['ibadah', 'ilm', 'jism', 'ruh', 'dunya']);
+      for (const p of patch.practices) {
+        if (typeof p !== 'object' || !p.id || !p.name) return 'each practice must have id and name';
+        if (p.category && !validCategories.has(p.category)) return `Invalid category: "${p.category}"`;
+      }
+      const oldIds = DB.practices.map(p => p.id);
+      const newIds = patch.practices.map(p => p.id);
+      const removed = oldIds.filter(id => !newIds.includes(id));
+      if (removed.length > 1) return `Refused: trying to remove ${removed.length} practices at once — only 1 deletion allowed per command`;
+    }
+
+    // Validate profile — only specific safe fields
+    if (key === 'profile') {
+      const prof = patch.profile;
+      if (typeof prof !== 'object' || Array.isArray(prof)) return 'profile must be an object';
+      const allowedProfileKeys = new Set(['name', 'theme', 'fontSize', 'timezone']);
+      for (const pk of Object.keys(prof)) {
+        if (!allowedProfileKeys.has(pk)) delete prof[pk]; // strip silently
+      }
+      if (prof.theme && !['light', 'dark', 'sepia'].includes(prof.theme)) return `Invalid theme: "${prof.theme}"`;
+      if (prof.fontSize && !['small', 'medium', 'large'].includes(prof.fontSize)) return `Invalid fontSize: "${prof.fontSize}"`;
     }
   }
 
@@ -7426,36 +7496,72 @@ function aiBuildContext() {
         id: e.id, amount: e.amount, desc: e.desc, date: e.date,
       })),
     },
-    profile: { name: DB.profile?.name || '' },
+    wirdList: DB.wird.map(w => ({ id: w.id, ar: w.ar, en: w.en, target: w.target })),
+    practicesList: DB.practices.map(p => ({ id: p.id, name: p.name, ar: p.ar, category: p.category, emoji: p.emoji, color: p.color })),
+    profile: {
+      name: DB.profile?.name || '',
+      theme: DB.profile?.theme || 'light',
+      fontSize: DB.profile?.fontSize || 'medium',
+      timezone: DB.profile?.timezone || 'Africa/Casablanca',
+    },
   };
 }
 
 // ── Build the system prompt ──
 function aiBuildSystemPrompt() {
-  return `You are a data assistant for SaadOs, an Islamic personal productivity app. The user speaks to you in plain language and you must return ONLY a valid JSON patch to update the app's database.
+  return `You are a data assistant for SaadOs, an Islamic personal productivity app. The user gives you a command and you return a JSON patch to update the database.
 
-RULES:
-1. Return ONLY raw JSON — no markdown, no backticks, no explanation, no preamble.
-2. Only include fields that need to change. Never include unchanged data.
-3. Only use these top-level keys: "days", "mal". Never use others.
-4. For prayers: location must be "mosque", "home", or "not_yet". timing must be "on_time", "late", or "not_yet".
-5. When location is "mosque", always set timing to "on_time".
-6. "All salawat" means all 5: fajr, dhuhr, asr, maghrib, isha.
-7. For expenses: add a new object to mal.expenses array with fields: id (generate a short random string like "exp_abc123"), amount (number), desc (string), date (current ISO date string: ${new Date().toISOString()}).
-8. For journal autocorrect: fix spelling and grammar of the text field, preserve Arabic words exactly, return the corrected text in days[today].journal.text.
-9. For niyyah: update days[today].niyyah with the user's intention as a clean sentence.
-10. For adding a task: add to days[today].tasks array. Task object: { id: "t_" + random 6 chars, name: string, block: one of [fajr,dhuhr,asr,maghrib,isha], note: string or "", duration: number (minutes) or null, pomSessions: 4, done: false, createdAt: "${todayStr()}" }. Pick the most logical block based on context or time of day.
-11. For completing/marking a task done: find the task by name in days[today].tasks and set done:true. Return the full updated tasks array.
-12. For deleting a task: return days[today].tasks as the full array with that task removed.
-13. For deleting a journal image: return days[today].journal.images as the full array with that image removed. Images are objects with driveId and name fields. "first image" = index 0, "last image" = last item, "second image" = index 1.
-14. If you cannot understand the request, return: {"error": "Could not understand request"}
-15. Never delete data unless explicitly asked. Never set arrays to null.
+CRITICAL OUTPUT RULES:
+1. Return ONLY raw JSON — no markdown, no backticks, no explanation, no preamble, nothing else.
+2. Only include fields that CHANGE. Never copy back read-only context data.
+3. Allowed top-level keys: "days", "mal", "wird", "practices", "profile". Nothing else.
 
-PRAYER IDS: fajr, dhuhr, asr, maghrib, isha
-TASK BLOCK IDS (time block after that prayer): fajr, dhuhr, asr, maghrib, isha
+════ FULL ALLOWED WRITE SCHEMA ════
+
+days.[YYYY-MM-DD]:
+  niyyah: string
+  prayers.[fajr|dhuhr|asr|maghrib|isha]:
+    location: "mosque" | "home" | "not_yet"
+    timing: "on_time" | "late" | "not_yet"
+  nawafil: full array of { id, name, location, timing, addedAt }
+  tasks: full array of { id, name, block, note, duration, pomSessions, done, createdAt }
+    block must be one of: fajr | dhuhr | asr | maghrib | isha
+  journal:
+    text: string (preserve Arabic, fix spelling only if asked)
+    tags: array of strings
+    images: full array of { driveId, name } (for deletions only)
+  wirdCounts: { [wirdId]: number } — increment/decrement wird counts
+  practicesDone: { [practiceId]: true|false } — mark practices done/undone
+
+mal:
+  budget: number
+  expenses: array of NEW items only: { id: "exp_"+random, amount: number, desc: string, date: ISO string }
+
+wird: full array of { id, ar, en, target } — for adding/editing/deleting wird items
+  WARNING: this replaces the whole wird list. Always include ALL existing items + your change.
+
+practices: full array of { id, name, ar, category, emoji, color } — for adding/editing/deleting practices
+  category must be one of: ibadah | ilm | jism | ruh | dunya
+  WARNING: this replaces the whole practices list. Always include ALL existing items + your change.
+
+profile:
+  name: string
+  theme: "light" | "dark" | "sepia"
+  fontSize: "small" | "medium" | "large"
+  timezone: string (e.g. "Africa/Casablanca")
+
+════ SAFETY RULES ════
+- NEVER set any value to null
+- NEVER omit existing items when replacing wird or practices arrays
+- NEVER touch journal.images unless user explicitly asks to delete an image
+- NEVER invent practiceIds or wirdIds — use IDs from the context data
+- For expenses: only APPEND new items, never rewrite the whole array
+- For wirdCounts: only include the specific wird being changed
+- For practicesDone: only include the specific practice being changed
+- If you cannot understand: return {"error": "Could not understand"}
+
 TODAY: ${todayStr()}
-CURRENT TIME: ${new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'})}
-DATA STRUCTURE: context.last7days is an object keyed by date (YYYY-MM-DD) containing each day's prayers, tasks, journal, nawafil, wirdCounts, practicesDone. context.mal has budget and recentExpenses (last 20).`;
+CURRENT TIME: ${new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'})}`;
 }
 
 // ── Call Groq with fallback models ──
@@ -7507,6 +7613,68 @@ async function aiCallGroq(systemPrompt, userMessage) {
 }
 
 // ── Main AI run function ──
+// ── Apply a validated patch safely to DB (shared by aiRun and aiChatSend) ──
+function aiApplyPatch(patch) {
+  if (patch.days) {
+    for (const [dateKey, dayPatch] of Object.entries(patch.days)) {
+      const existingDay = getDay(dateKey);
+
+      // Tasks — AI returns the full array, replace directly
+      if (dayPatch.tasks !== undefined) {
+        existingDay.tasks = dayPatch.tasks;
+        delete dayPatch.tasks;
+      }
+
+      // Nawafil — full array replace
+      if (dayPatch.nawafil !== undefined) {
+        existingDay.nawafil = dayPatch.nawafil;
+        delete dayPatch.nawafil;
+      }
+
+      // Journal images — full array replace
+      if (dayPatch.journal?.images !== undefined) {
+        if (!existingDay.journal) existingDay.journal = {text:'',tags:[],images:[],videos:[]};
+        existingDay.journal.images = dayPatch.journal.images;
+        delete dayPatch.journal.images;
+        if (Object.keys(dayPatch.journal).length === 0) delete dayPatch.journal;
+      }
+
+      // Everything else (niyyah, prayers, journal.text/tags, wirdCounts, practicesDone) — deep merge
+      aiDeepMerge(existingDay, dayPatch);
+    }
+  }
+
+  if (patch.mal) {
+    if (!DB.mal) DB.mal = { budget: 0, expenses: [] };
+    if (patch.mal.budget !== undefined) DB.mal.budget = patch.mal.budget;
+    if (patch.mal.expenses) {
+      if (!Array.isArray(DB.mal.expenses)) DB.mal.expenses = [];
+      for (const exp of patch.mal.expenses) {
+        if (exp.id && !DB.mal.expenses.find(e => e.id === exp.id)) {
+          DB.mal.expenses.push(exp);
+        }
+      }
+    }
+  }
+
+  // Wird — full array replace (already validated: max 1 deletion, never empties existing list)
+  if (patch.wird) {
+    DB.wird = patch.wird;
+  }
+
+  // Practices — full array replace (already validated: max 1 deletion, never empties existing list)
+  if (patch.practices) {
+    DB.practices = patch.practices;
+  }
+
+  // Profile — merge only safe fields (already stripped/validated)
+  if (patch.profile) {
+    if (!DB.profile) DB.profile = {};
+    Object.assign(DB.profile, patch.profile);
+    if (patch.profile.theme) applyTheme(patch.profile.theme);
+  }
+}
+
 async function aiRun() {
   const input = document.getElementById('ai-input');
   const btn   = document.getElementById('ai-send-btn');
@@ -7550,43 +7718,7 @@ async function aiRun() {
     }
 
     // ── SAFE MERGE ──
-    if (patch.days) {
-      for (const [dateKey, dayPatch] of Object.entries(patch.days)) {
-        const existingDay = getDay(dateKey);
-
-        // Tasks — AI returns the full array, replace directly
-        if (dayPatch.tasks !== undefined) {
-          existingDay.tasks = dayPatch.tasks;
-          delete dayPatch.tasks;
-        }
-
-        // Journal images — AI returns the full array, replace directly
-        if (dayPatch.journal?.images !== undefined) {
-          if (!existingDay.journal) existingDay.journal = {text:'',tags:[],images:[],videos:[]};
-          existingDay.journal.images = dayPatch.journal.images;
-          delete dayPatch.journal.images;
-          if (Object.keys(dayPatch.journal).length === 0) delete dayPatch.journal;
-        }
-
-        // Everything else — deep merge
-        aiDeepMerge(existingDay, dayPatch);
-      }
-    }
-
-    if (patch.mal) {
-      if (!DB.mal) DB.mal = { budget: 0, expenses: [] };
-      if (patch.mal.budget !== undefined) {
-        DB.mal.budget = patch.mal.budget;
-      }
-      if (patch.mal.expenses) {
-        if (!Array.isArray(DB.mal.expenses)) DB.mal.expenses = [];
-        for (const exp of patch.mal.expenses) {
-          if (exp.id && !DB.mal.expenses.find(e => e.id === exp.id)) {
-            DB.mal.expenses.push(exp);
-          }
-        }
-      }
-    }
+    aiApplyPatch(patch);
 
     // ── Done — persist and re-render ──
     markUnsaved();
@@ -7720,13 +7852,23 @@ Greet in Arabic occasionally. Be warm and personal.
 USER'S CURRENT DATA:
 ${JSON.stringify(context, null, 2)}
 
-SCHEMA REMINDER for ACTION patches:
-- Prayer location: "mosque" | "home" | "not_yet"
-- Prayer timing: "on_time" | "late" | "not_yet"
-- Tasks: full array replacement with objects {id, name, block, note, duration, pomSessions, done, createdAt}
-- Expenses: append to mal.expenses array with {id, amount, desc, date}
-- Niyyah: days[date].niyyah string
-- Journal text: days[date].journal.text string`;
+SCHEMA — ACTION patch may ONLY contain these keys:
+days.[YYYY-MM-DD].niyyah: string
+days.[YYYY-MM-DD].prayers.[fajr|dhuhr|asr|maghrib|isha].location: "mosque"|"home"|"not_yet"
+days.[YYYY-MM-DD].prayers.[fajr|dhuhr|asr|maghrib|isha].timing: "on_time"|"late"|"not_yet"
+days.[YYYY-MM-DD].nawafil: full array of {id,name,location,timing,addedAt}
+days.[YYYY-MM-DD].tasks: full array of {id,name,block,note,duration,pomSessions,done,createdAt}
+days.[YYYY-MM-DD].journal.text: string
+days.[YYYY-MM-DD].journal.images: full array of {driveId,name} — only for deletions
+days.[YYYY-MM-DD].wirdCounts: {[wirdId]: number} — use IDs from context.wirdList
+days.[YYYY-MM-DD].practicesDone: {[practiceId]: true|false} — use IDs from context.practicesList
+mal.expenses: array of NEW items only {id,amount,desc,date}
+mal.budget: number
+wird: full array of {id,ar,en,target} — include ALL existing items from context.wirdList plus your change, max 1 deletion per command
+practices: full array of {id,name,ar,category,emoji,color} — include ALL existing items from context.practicesList plus your change, max 1 deletion per command, category one of ibadah|ilm|jism|ruh|dunya
+profile: {name, theme:"light"|"dark"|"sepia", fontSize:"small"|"medium"|"large", timezone}
+DO NOT include: recentExpenses, last7days, wirdList, practicesList, index, currentSection, or any other read-only context field.
+NEVER invent a wird or practice id — only use ids already present in context.wirdList / context.practicesList.`;
 
   try {
     const messages = [
@@ -7780,35 +7922,7 @@ SCHEMA REMINDER for ACTION patches:
     if (actionPatch) {
       const validationError = aiValidatePatch(actionPatch);
       if (!validationError) {
-        // Apply patch (same logic as aiRun)
-        if (actionPatch.days) {
-          for (const [dateKey, dayPatch] of Object.entries(actionPatch.days)) {
-            const existingDay = getDay(dateKey);
-            if (dayPatch.tasks !== undefined) {
-              existingDay.tasks = dayPatch.tasks;
-              delete dayPatch.tasks;
-            }
-            if (dayPatch.journal?.images !== undefined) {
-              if (!existingDay.journal) existingDay.journal = {text:'',tags:[],images:[],videos:[]};
-              existingDay.journal.images = dayPatch.journal.images;
-              delete dayPatch.journal.images;
-              if (Object.keys(dayPatch.journal).length === 0) delete dayPatch.journal;
-            }
-            aiDeepMerge(existingDay, dayPatch);
-          }
-        }
-        if (actionPatch.mal) {
-          if (!DB.mal) DB.mal = { budget: 0, expenses: [] };
-          if (actionPatch.mal.budget !== undefined) DB.mal.budget = actionPatch.mal.budget;
-          if (actionPatch.mal.expenses) {
-            if (!Array.isArray(DB.mal.expenses)) DB.mal.expenses = [];
-            for (const exp of actionPatch.mal.expenses) {
-              if (exp.id && !DB.mal.expenses.find(e => e.id === exp.id)) {
-                DB.mal.expenses.push(exp);
-              }
-            }
-          }
-        }
+        aiApplyPatch(actionPatch);
         markUnsaved();
         renderSection();
         aiChatAddMsg('ai', '✓ Done — your data has been updated.', 'action');
