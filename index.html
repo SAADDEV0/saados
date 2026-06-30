@@ -4698,7 +4698,7 @@ function last30ReadTitles() {
 // Background-only: pulls more topics from Groq when the queue runs low.
 // Fully separate context from the command/chat AI — only read prefs + titles, nothing else.
 async function generateReadTopics() {
-  if (_readGenInFlight) return;
+  if (_readGenInFlight) return { success: false, count: 0, error: 'Already generating' };
   _readGenInFlight = true;
   try {
     const allCats = getAllReadCategories();
@@ -4720,24 +4720,40 @@ async function generateReadTopics() {
       prompt
     );
     const clean = raw.replace(/```json|```/g, '').trim();
-    const arr = JSON.parse(clean);
-
-    if (Array.isArray(arr)) {
-      arr.forEach(item => {
-        if (item && item.title && item.content) {
-          const catId = allCats.find(c => c.en === item.category)?.id || enabledIds[0] || 'science';
-          DB.readQueue.push({ title: item.title, content: item.content, category: catId, depth: depthId });
-        }
-      });
-      markUnsaved();
-      // If the read tab is open and still waiting on a topic, fill it in now.
-      if (currentSection === 'read') {
-        const ds = todayStr();
-        if (!getDay(ds).readTopic && DB.readQueue.length > 0) renderSection();
-      }
+    let arr;
+    try {
+      arr = JSON.parse(clean);
+    } catch (parseErr) {
+      throw new Error('AI returned invalid format — try again');
     }
+
+    if (!Array.isArray(arr) || arr.length === 0) {
+      throw new Error('AI returned no articles — try again');
+    }
+
+    let added = 0;
+    arr.forEach(item => {
+      if (item && item.title && item.content) {
+        const catId = allCats.find(c => c.en === item.category)?.id || enabledIds[0] || 'science';
+        DB.readQueue.push({ title: item.title, content: item.content, category: catId, depth: depthId });
+        added++;
+      }
+    });
+
+    if (added === 0) {
+      throw new Error('AI returned articles in an unexpected format — try again');
+    }
+
+    markUnsaved();
+    // If the read tab is open and still waiting on a topic, fill it in now.
+    if (currentSection === 'read') {
+      const ds = todayStr();
+      if (!getDay(ds).readTopic && DB.readQueue.length > 0) renderSection();
+    }
+    return { success: true, count: added, error: null };
   } catch (e) {
     console.warn('Read topic generation failed:', e.message);
+    return { success: false, count: 0, error: e.message || 'Generation failed' };
   } finally {
     _readGenInFlight = false;
   }
@@ -4750,10 +4766,20 @@ async function manualGenerateReadTopics() {
   btn.disabled = true;
   btn.textContent = 'Generating…';
   try {
-    await generateReadTopics();
-    aiToast('✓ New articles added', 'ok');
+    const result = await generateReadTopics();
+    if (result && result.success) {
+      aiToast(`✓ ${result.count} new article${result.count === 1 ? '' : 's'} added`, 'ok');
+      // Make sure today's topic is actually filled in, then reveal it.
+      if (currentSection === 'read') {
+        ensureTodayReadTopic();
+        closeSettings();
+        renderSection();
+      }
+    } else {
+      aiToast('✕ ' + (result?.error || 'Generation failed'), 'err');
+    }
   } catch (e) {
-    aiToast('✕ Generation failed', 'err');
+    aiToast('✕ ' + (e.message || 'Generation failed'), 'err');
   } finally {
     btn.disabled = false;
     btn.textContent = originalText;
