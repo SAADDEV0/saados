@@ -4758,6 +4758,7 @@ async function generateReadTopics(opts) {
     const catNames = enabledIds.map(id => (allCats.find(c => c.id === id) || { en: id }).en);
     const depthId = (opts && opts.depthId) || DB.profile.readDepth || 'standard';
     const depthInfo = READ_DEPTHS.find(d => d.id === depthId) || READ_DEPTHS[1];
+    const contextHint = (opts && opts.contextHint) || '';
 
     const recentTitles = last30ReadTitles();
     const queueTitles = (DB.readQueue || []).map(t => t.title);
@@ -4765,7 +4766,11 @@ async function generateReadTopics(opts) {
     // Pick one category for this article so the model doesn't have to juggle several.
     const category = catNames[Math.floor(Math.random() * catNames.length)] || catNames[0];
 
-    const prompt = `Write one short article for a daily reading habit app, in the category "${category}". Target length: ${depthInfo.words}. Do not repeat or closely resemble any of these already-used or queued titles: ${avoidTitles.length ? avoidTitles.join('; ') : '(none yet)'}. Formatting rules for the "content" field: write in clear, well-structured prose broken into short paragraphs separated by a blank line (\\n\\n); for articles longer than ~800 words, add a few short "## Subheading" lines to break up sections; do not use bullet points or numbered lists; use **bold** sparingly only for genuinely key terms. Return ONLY a single JSON object with exactly these keys: title, content, category. No preamble, no markdown code fences, no extra text before or after the JSON.`;
+    const topicLine = contextHint
+      ? `The user specifically wants the article to be about: "${contextHint}". Use the category "${category}" as the broader frame, but focus the content on that topic.`
+      : `Write about any interesting topic within the category "${category}".`;
+
+    const prompt = `Write one article for a daily reading habit app. ${topicLine} Target length: ${depthInfo.words}. Do not repeat or closely resemble any of these already-used or queued titles: ${avoidTitles.length ? avoidTitles.join('; ') : '(none yet)'}. Formatting rules for the "content" field: write in clear, well-structured prose broken into short paragraphs separated by a blank line (\\n\\n); for articles longer than ~800 words, add a few short "## Subheading" lines to break up sections; do not use bullet points or numbered lists; use **bold** sparingly only for genuinely key terms. Return ONLY a single JSON object with exactly these keys: title, content, category. No preamble, no markdown code fences, no extra text before or after the JSON.`;
 
     // Token budget must scale with the requested word count, or long ("deep")
     // articles get cut off mid-JSON and fail to parse. ~1.6 tokens/word for
@@ -4854,6 +4859,10 @@ function openGenerateArticleModal(keepSelected, keepDepth) {
   document.getElementById('modal-content').innerHTML = `
     <div class="modal-title">Generate a new article</div>
     <div class="fg">
+      <label class="fl">Topic hint <span style="font-weight:400;opacity:0.55">(optional)</span></label>
+      <textarea id="gen-art-context" class="fi" rows="3" placeholder="e.g. The psychology of procrastination, black holes, Ottoman history… leave blank for a random pick based on your categories." style="resize:vertical;min-height:72px;font-size:14px"></textarea>
+    </div>
+    <div class="fg">
       <label class="fl">Categories</label>
       <div class="filter-row" id="gen-art-cats">
         ${allCats.map(c => `<div class="fc ${keepSelected && keepSelected.includes(c.id) ? 'on' : ''}" data-id="${esc(c.id)}" onclick="this.classList.toggle('on')">${esc(c.en)}</div>`).join('')}
@@ -4902,12 +4911,13 @@ async function submitGenerateArticle() {
   if (!catIds.length) { aiToast('✕ Pick at least one category', 'err'); return; }
   const depthEl = document.querySelector('#gen-art-depth .fc.on');
   const depthId = depthEl ? depthEl.dataset.id : (DB.profile.readDepth || 'standard');
+  const contextHint = (document.getElementById('gen-art-context')?.value || '').trim();
 
   const btn = document.getElementById('gen-art-submit');
   const originalText = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
   try {
-    const result = await generateReadTopics({ categoryIds: catIds, depthId });
+    const result = await generateReadTopics({ categoryIds: catIds, depthId, contextHint });
     if (result && result.success) {
       // Remember this pick so the avoid-titles / category-of-last-resort logic
       // elsewhere has something sensible, but it's never used to preselect the modal.
