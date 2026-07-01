@@ -4617,8 +4617,11 @@ function renderRead(el) {
   }
 
   if (!topic) {
-    h += `<div style="text-align:center;padding:60px 0;font-family:var(--serif);font-style:italic;font-size:16px;color:var(--ink4)">
-      Preparing today's topic…<br><span style="font-size:12px;font-style:normal">Check back in a moment.</span>
+    h += `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 0 40px;gap:18px;text-align:center">
+      <div style="font-size:44px">📖</div>
+      <div style="font-family:var(--serif);font-size:20px;font-weight:500;color:var(--text)">No article for today yet</div>
+      <div style="font-size:14px;color:var(--ink4);max-width:260px;line-height:1.6">Pick a category and topic, then generate your reading for the day.</div>
+      <button class="submit-btn" style="margin-top:8px" onclick="openGenerateArticleModal()">✦ Generate today's article</button>
     </div>`;
   } else {
     const catLabel = (getAllReadCategories().find(c => c.id === topic.category) || { en: topic.category }).en;
@@ -4646,15 +4649,12 @@ function renderRead(el) {
 function ensureTodayReadTopic() {
   const ds = todayStr();
   const day = getDay(ds);
-  if (!day.readTopic) {
-    if (DB.readQueue && DB.readQueue.length > 0) {
-      const next = DB.readQueue.shift();
-      day.readTopic = { title: next.title, content: next.content, category: next.category, depth: next.depth, done: false, reaction: null };
-      markUnsaved();
-    }
+  if (!day.readTopic && DB.readQueue && DB.readQueue.length > 0) {
+    const next = DB.readQueue.shift();
+    day.readTopic = { title: next.title, content: next.content, category: next.category, depth: next.depth, done: false, reaction: null };
+    markUnsaved();
   }
   if (!DB.readQueue) DB.readQueue = [];
-  if (DB.readQueue.length <= 2) generateReadTopics();
 }
 
 function getReadStreak() {
@@ -4919,18 +4919,14 @@ async function submitGenerateArticle() {
   try {
     const result = await generateReadTopics({ categoryIds: catIds, depthId, contextHint });
     if (result && result.success) {
-      // Remember this pick so the avoid-titles / category-of-last-resort logic
-      // elsewhere has something sensible, but it's never used to preselect the modal.
       DB.profile.readCategories = catIds;
       DB.profile.readDepth = depthId;
       markUnsaved();
       closeModal();
-      aiToast(`✓ ${result.count} new article${result.count === 1 ? '' : 's'} added`, 'ok');
-      if (currentSection === 'read') {
-        ensureTodayReadTopic();
-        closeSettings();
-        renderSection();
-      }
+      // Pull the freshly generated article into today immediately so the
+      // user sees it right away without any extra step.
+      ensureTodayReadTopic();
+      renderSection();
     } else {
       aiToast('✕ ' + (result?.error || 'Generation failed'), 'err');
     }
@@ -7307,11 +7303,10 @@ function openSettings() {
     </div>
     <div class="s-section">
       <div class="s-section-title">Read Topics</div>
-      <div class="fl" style="margin-bottom:8px">Depth</div>
+      <div class="fl" style="margin-bottom:8px">Default length</div>
       <div class="filter-row" style="margin-bottom:18px">
         ${READ_DEPTHS.map(d=>`<div class="fc ${(DB.profile.readDepth||'standard')===d.id?'on':''}" onclick="setReadDepth('${d.id}')">${d.en} · ${d.sub}</div>`).join('')}
       </div>
-      <button class="s-btn" id="read-gen-btn" onclick="openGenerateArticleModal()">✦ Generate New Articles</button>
     </div>`;
   document.getElementById('settings-bg').classList.add('open');
 }
