@@ -114,7 +114,7 @@ body {
   transform: translateX(-50%);
   z-index: 799;
   width: min(calc(100vw - 32px), var(--col));
-  display: flex;
+  display: none;
   align-items: center;
   gap: 8px;
   background: var(--surface);
@@ -124,6 +124,29 @@ body {
   box-shadow: 0 4px 24px rgba(20,18,14,0.10), 0 1px 4px rgba(20,18,14,0.06);
   transition: border-color 0.2s, box-shadow 0.2s;
 }
+#ai-bar.show { display: flex; }
+
+/* Fixed top-left button that reveals the AI bar */
+#ai-corner-btn {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 950;
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--ink3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s var(--ease);
+}
+#ai-corner-btn:hover,
+#ai-corner-btn.active { border-color: var(--gold); color: var(--gold); background: var(--surface2); }
 #ai-bar:focus-within {
   border-color: var(--gold);
   box-shadow: 0 4px 28px rgba(176,120,24,0.15), 0 1px 4px rgba(20,18,14,0.06);
@@ -3089,6 +3112,9 @@ canvas { width: 100%; display: block; }
 </head>
 <body>
 
+<!-- Fixed top-left button: reveals/hides the AI command bar -->
+<button id="ai-corner-btn" onclick="toggleAiBar()" title="SaadOs AI">✦</button>
+
 <!-- ════════════════════════════════
      ONBOARDING
 ════════════════════════════════ -->
@@ -3123,7 +3149,6 @@ canvas { width: 100%; display: block; }
       <div class="hero-today-pill" onclick="goToday()">Today</div>
       <button class="hero-day-btn" onclick="shiftDay(1)">›</button>
     </div>
-    <button class="hero-ai-btn" id="hero-ai-btn" onclick="aiChatToggle()" title="SaadOs AI">✦</button>
     <button class="hero-settings-btn" onclick="openSettings()">⚙</button>
     <div id="sync-status-hero">
       <div class="sync-dot idle" id="sync-dot"></div>
@@ -8229,16 +8254,16 @@ const aiChatHistory = [];
 
 function aiChatToggle() {
   const win = document.getElementById('ai-chat-window');
-  const heroBtn = document.getElementById('hero-ai-btn');
+  const cornerBtn = document.getElementById('ai-corner-btn');
   const barBtn  = document.getElementById('ai-chat-toggle');
   const isOpen  = win.classList.contains('open');
   if (isOpen) {
     win.classList.remove('open');
-    heroBtn && heroBtn.classList.remove('active');
+    cornerBtn && cornerBtn.classList.remove('active');
     barBtn  && barBtn.classList.remove('active');
   } else {
     win.classList.add('open');
-    heroBtn && heroBtn.classList.add('active');
+    cornerBtn && cornerBtn.classList.add('active');
     barBtn  && barBtn.classList.add('active');
     document.getElementById('ai-chat-input').focus();
     aiChatScrollBottom();
@@ -8247,10 +8272,24 @@ function aiChatToggle() {
 
 function aiChatClose() {
   document.getElementById('ai-chat-window').classList.remove('open');
-  const heroBtn = document.getElementById('hero-ai-btn');
+  const cornerBtn = document.getElementById('ai-corner-btn');
   const barBtn  = document.getElementById('ai-chat-toggle');
-  heroBtn && heroBtn.classList.remove('active');
+  cornerBtn && cornerBtn.classList.remove('active');
   barBtn  && barBtn.classList.remove('active');
+}
+
+// Fixed top-left button: shows/hides the whole AI command bar
+function toggleAiBar() {
+  const bar = document.getElementById('ai-bar');
+  const cornerBtn = document.getElementById('ai-corner-btn');
+  const showing = bar.classList.toggle('show');
+  cornerBtn && cornerBtn.classList.toggle('active', showing);
+  if (showing) {
+    document.getElementById('ai-input')?.focus();
+  } else {
+    // also close the chat window when hiding the bar
+    document.getElementById('ai-chat-window')?.classList.remove('open');
+  }
 }
 
 function aiChatScrollBottom() {
