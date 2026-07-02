@@ -7693,8 +7693,7 @@ function scheduleReminder() {
    → JSON patch → DB merge → markUnsaved()
 ════════════════════════════════════════════════ */
 
-const GROQ_API_KEY = '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';
-const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const GROQ_URL = 'https://saados-khaki.vercel.app/api/grok';
 
 // Safe top-level keys AI is allowed to touch
 const AI_ALLOWED_KEYS = new Set(['days', 'mal', 'wird', 'practices', 'profile']);
@@ -7996,7 +7995,6 @@ async function aiCallGroq(systemPrompt, userMessage, maxTokens = 1000) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${GROQ_API_KEY}`,
         },
         body: JSON.stringify({
           model,
@@ -8163,11 +8161,6 @@ async function aiRun() {
   const text  = input.value.trim();
   if (!text) { input.focus(); return; }
 
-  if (GROQ_API_KEY === 'YOUR_GROQ_KEY_HERE') {
-    aiToast('⚠ Add your Groq API key to the file first', 'err');
-    return;
-  }
-
   btn.disabled = true;
   btn.textContent = '…';
   aiToast('Thinking…');
@@ -8304,11 +8297,6 @@ async function aiChatSend() {
   const text  = input.value.trim();
   if (!text) return;
 
-  if (GROQ_API_KEY === 'YOUR_GROQ_KEY_HERE') {
-    aiChatAddMsg('ai', '⚠ Add your Groq API key to the file first.', 'error');
-    return;
-  }
-
   // Add user message to UI and history
   aiChatAddMsg('user', text);
   aiChatHistory.push({ role: 'user', content: text });
@@ -8361,7 +8349,6 @@ NEVER invent a wird or practice id — only use ids already present in context.w
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${GROQ_API_KEY}`,
       },
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile',
