@@ -3113,7 +3113,7 @@ canvas { width: 100%; display: block; }
 <body>
 
 <!-- Fixed top-left button: reveals/hides the AI command bar -->
-<button id="ai-corner-btn" onclick="toggleAiBar()" title="SaadOs AI">✦</button>
+<button id="ai-corner-btn" onclick="aiChatToggle()" title="SaadOs AI">✦</button>
 
 <!-- ════════════════════════════════
      ONBOARDING
@@ -3392,6 +3392,18 @@ function setSyncState(s, detail) {
   // auto-clear "Saved" after 2s
   if(s === 'ok') setTimeout(()=>{ if(syncState==='ok'){ setSyncState('idle'); }}, 2000);
 }
+
+// Guard against losing unsaved changes: if the user closes/refreshes the tab
+// while a save to Drive is still in flight (or has failed), warn them first.
+// Without this, a refresh right after typing/tapping something cancels the
+// in-flight network write and that change never reaches Drive.
+window.addEventListener('beforeunload', (e) => {
+  if (syncState === 'syncing' || _unsyncedChanges) {
+    e.preventDefault();
+    e.returnValue = '';
+    return '';
+  }
+});
 
 /* ════════════════════════════════════════════════
    MARK CHANGED → IMMEDIATE DRIVE PUSH
@@ -3756,7 +3768,33 @@ function focusSaveTime() {
 /* ════════════════════════════════════════════════
    DATE
 ════════════════════════════════════════════════ */
-function todayStr() { return new Date().toISOString().split('T')[0]; }
+// "Today" is always Morocco's calendar date — computed explicitly via the
+// Africa/Casablanca timezone, never the device's own system timezone. This
+// keeps the app's day boundary identical on every device (PC, phone, etc.)
+// regardless of how that device's clock/timezone is configured.
+function todayStr() {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Casablanca' }).format(new Date());
+  } catch(e) {
+    return new Date().toISOString().split('T')[0];
+  }
+}
+// Current Casablanca wall-clock time as minutes-since-midnight — used for
+// prayer countdown/next-prayer logic so it's never affected by the device's
+// own local timezone setting.
+function _casablancaMinutesNow() {
+  try {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Africa/Casablanca', hour: '2-digit', minute: '2-digit', hour12: false
+    }).formatToParts(new Date());
+    const h = parseInt(parts.find(p => p.type === 'hour').value, 10);
+    const m = parseInt(parts.find(p => p.type === 'minute').value, 10);
+    return h * 60 + m;
+  } catch(e) {
+    const now = new Date();
+    return now.getHours() * 60 + now.getMinutes();
+  }
+}
 function getTimezone() { return DB.profile.timezone || 'Africa/Casablanca'; }
 function getCurrentTimeStr() {
   try {
@@ -4215,8 +4253,7 @@ function _parseHM(hm) {
 }
 
 function _getNextPrayer(times) {
-  const now = new Date();
-  const cur = now.getHours()*60 + now.getMinutes();
+  const cur = _casablancaMinutesNow();
   const order = ['fajr','dhuhr','asr','maghrib','isha'];
   for(const id of order){
     if(_parseHM(times[id]) > cur) return id;
@@ -4225,8 +4262,7 @@ function _getNextPrayer(times) {
 }
 
 function _formatCountdown(times, nextId) {
-  const now = new Date();
-  const cur = now.getHours()*60 + now.getMinutes();
+  const cur = _casablancaMinutesNow();
   let target = _parseHM(times[nextId]);
   if(target <= cur) target += 24*60; // tomorrow
   let diff = target - cur;
@@ -7638,11 +7674,6 @@ function formatArticleContent(raw) {
 </div>
 
 <div id="ai-toast"></div>
-<div id="ai-bar">
-  <input id="ai-input" type="text" placeholder="Tell SaadOs anything… prayed all salawat in masjid, spent 50 MAD on lunch…" autocomplete="off" autocorrect="off" spellcheck="false" />
-  <button id="ai-chat-toggle" onclick="aiChatToggle()" title="Chat with AI">💬</button>
-  <button id="ai-send-btn" onclick="aiRun()" title="Run">✦</button>
-</div>
 
 <script>
 // Register service worker for PWA installability + offline app shell
@@ -7903,8 +7934,9 @@ function aiBuildContext() {
 
   // Build last 7 days of prayer + task data
   const last7 = {};
+  const _anchor7 = new Date(today + 'T12:00:00');
   for (let i = 0; i < 7; i++) {
-    const d = new Date();
+    const d = new Date(_anchor7);
     d.setDate(d.getDate() - i);
     const key = d.toISOString().slice(0, 10);
     const dayData = DB.days[key];
@@ -8183,69 +8215,6 @@ function aiApplyPatch(patch) {
   }
 }
 
-async function aiRun() {
-  const input = document.getElementById('ai-input');
-  const btn   = document.getElementById('ai-send-btn');
-  const text  = input.value.trim();
-  if (!text) { input.focus(); return; }
-
-
-
-  btn.disabled = true;
-  btn.textContent = '…';
-  aiToast('Thinking…');
-
-  const context = aiBuildContext();
-  const userMessage = `Current app state:\n${JSON.stringify(context, null, 2)}\n\nUser command: "${text}"`;
-
-  try {
-    const raw = await aiCallGroq(aiBuildSystemPrompt(), userMessage);
-
-    // Strip any accidental markdown fences
-    const clean = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
-
-    let patch;
-    try {
-      patch = JSON.parse(clean);
-    } catch (e) {
-      throw new Error('AI returned invalid JSON — try rephrasing');
-    }
-
-    // Check if AI returned an error signal
-    if (patch.error) {
-      throw new Error(patch.error);
-    }
-
-    // Validate before touching anything
-    const validationError = aiValidatePatch(patch);
-    if (validationError) {
-      throw new Error('Validation failed: ' + validationError);
-    }
-
-    // ── SAFE MERGE ──
-    aiApplyPatch(patch);
-
-    // ── Done — persist and re-render ──
-    markUnsaved();
-    renderSection();
-
-    input.value = '';
-    aiToastWithUndo('Done ✓');
-
-  } catch (err) {
-    console.error('AI command error:', err);
-    aiToast('✕ ' + (err.message || 'Something went wrong'), 'err');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '✦';
-  }
-}
-
-// Enter key submits
-document.getElementById('ai-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); aiRun(); }
-});
-
 /* ════════════════════════════════════════════════
    AI CHAT WINDOW
 ════════════════════════════════════════════════ */
@@ -8278,19 +8247,7 @@ function aiChatClose() {
   barBtn  && barBtn.classList.remove('active');
 }
 
-// Fixed top-left button: shows/hides the whole AI command bar
-function toggleAiBar() {
-  const bar = document.getElementById('ai-bar');
-  const cornerBtn = document.getElementById('ai-corner-btn');
-  const showing = bar.classList.toggle('show');
-  cornerBtn && cornerBtn.classList.toggle('active', showing);
-  if (showing) {
-    document.getElementById('ai-input')?.focus();
-  } else {
-    // also close the chat window when hiding the bar
-    document.getElementById('ai-chat-window')?.classList.remove('open');
-  }
-}
+
 
 function aiChatScrollBottom() {
   const msgs = document.getElementById('ai-chat-messages');
