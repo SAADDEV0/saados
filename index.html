@@ -3456,7 +3456,29 @@ function markUnsaved(isJournalText = false) {
   }
 }
 
-async function _doPush() {
+// ── Push serialization ──────────────────────────────────────────────
+// markUnsaved() can fire _doPush() many times in quick succession (every
+// task/prayer/wird toggle pushes instantly). If two pushes ever ran at
+// the same time, they could each race to look up/create the SAME day
+// folder in Drive before either had cached the result — and both would
+// end up creating a duplicate "YYYY-MM-DD" folder, with the two writes
+// landing in different folders (one of which then looks "empty").
+// This queue guarantees only one drivePush() is ever in flight; any
+// pushes requested while one is running are coalesced into a single
+// follow-up run once it finishes.
+let _pushInFlight = null;
+let _pushQueued = false;
+
+function _doPush() {
+  if (_pushInFlight) { _pushQueued = true; return _pushInFlight; }
+  _pushInFlight = _runPush().finally(() => {
+    _pushInFlight = null;
+    if (_pushQueued) { _pushQueued = false; _doPush(); }
+  });
+  return _pushInFlight;
+}
+
+async function _runPush() {
   try {
     if (!gdriveToken || Date.now() > gdriveTokenExpiry - 2 * 60 * 1000) {
       await silentDriveAuth(false);
@@ -6027,35 +6049,68 @@ async function _driveGet(url) {
   return r;
 }
 
+// In-flight lock: if two calls ask for the same name+parent before the
+// first one has resolved (and cached it upstream), they must share the
+// SAME promise instead of both racing to "find nothing, then create" —
+// that race is what produces duplicate "YYYY-MM-DD" folders in Drive.
+const _folderLookupLocks = {};
+
 async function _findOrMakeFolder(name, parentId) {
-  const q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
-  const r = await _driveGet(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`);
-  const d = await r.json();
-  if(d.files?.[0]?.id) return d.files[0].id;
-  const cr = await fetch('https://www.googleapis.com/drive/v3/files', {
-    method:'POST', headers:{ Authorization:'Bearer '+gdriveToken, 'Content-Type':'application/json' },
-    body: JSON.stringify({ name, mimeType:'application/vnd.google-apps.folder', parents:[parentId] }),
-  });
-  return (await cr.json()).id;
+  const key = parentId + '::' + name;
+  if (_folderLookupLocks[key]) return _folderLookupLocks[key];
+  const p = (async () => {
+    const q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
+    const r = await _driveGet(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)&orderBy=createdTime`);
+    const d = await r.json();
+    if(d.files?.[0]?.id) {
+      // If duplicates already exist from before this fix, silently prefer
+      // the oldest one (createdTime asc) so writes/reads converge on a
+      // single folder going forward.
+      return d.files[0].id;
+    }
+    const cr = await fetch('https://www.googleapis.com/drive/v3/files', {
+      method:'POST', headers:{ Authorization:'Bearer '+gdriveToken, 'Content-Type':'application/json' },
+      body: JSON.stringify({ name, mimeType:'application/vnd.google-apps.folder', parents:[parentId] }),
+    });
+    return (await cr.json()).id;
+  })();
+  _folderLookupLocks[key] = p;
+  try {
+    return await p;
+  } finally {
+    // Keep the resolved promise cached briefly isn't needed since callers
+    // (getDayFolder etc.) already cache the result themselves; just clear
+    // the lock so future distinct lookups aren't blocked forever.
+    delete _folderLookupLocks[key];
+  }
 }
 
+let _raqibRootLock = null;
 async function getRaqibRoot() {
   if(_raqibRootId) return _raqibRootId;
-  // Search for SaadOs and legacy Raqib folders in a single query
-  const q = `(name='SaadOs' or name='Raqib') and mimeType='application/vnd.google-apps.folder' and trashed=false`;
-  const r = await _driveGet(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)&orderBy=name desc`);
-  const d = await r.json();
-  // Prefer SaadOs over Raqib
-  const saados = d.files?.find(f => f.name === 'SaadOs');
-  const raqib  = d.files?.find(f => f.name === 'Raqib');
-  if(saados?.id) { _raqibRootId = saados.id; return _raqibRootId; }
-  if(raqib?.id)  { _raqibRootId = raqib.id;  return _raqibRootId; }
-  const cr = await fetch('https://www.googleapis.com/drive/v3/files', {
-    method:'POST', headers:{ Authorization:'Bearer '+gdriveToken, 'Content-Type':'application/json' },
-    body: JSON.stringify({ name:'SaadOs', mimeType:'application/vnd.google-apps.folder' }),
-  });
-  _raqibRootId = (await cr.json()).id;
-  return _raqibRootId;
+  if(_raqibRootLock) return _raqibRootLock;
+  _raqibRootLock = (async () => {
+    // Search for SaadOs and legacy Raqib folders in a single query
+    const q = `(name='SaadOs' or name='Raqib') and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+    const r = await _driveGet(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)&orderBy=name desc`);
+    const d = await r.json();
+    // Prefer SaadOs over Raqib
+    const saados = d.files?.find(f => f.name === 'SaadOs');
+    const raqib  = d.files?.find(f => f.name === 'Raqib');
+    if(saados?.id) { _raqibRootId = saados.id; return _raqibRootId; }
+    if(raqib?.id)  { _raqibRootId = raqib.id;  return _raqibRootId; }
+    const cr = await fetch('https://www.googleapis.com/drive/v3/files', {
+      method:'POST', headers:{ Authorization:'Bearer '+gdriveToken, 'Content-Type':'application/json' },
+      body: JSON.stringify({ name:'SaadOs', mimeType:'application/vnd.google-apps.folder' }),
+    });
+    _raqibRootId = (await cr.json()).id;
+    return _raqibRootId;
+  })();
+  try {
+    return await _raqibRootLock;
+  } finally {
+    _raqibRootLock = null;
+  }
 }
 
 // Raqib/YYYY/YYYY-MM-DD
@@ -6116,6 +6171,109 @@ async function _upsertJsonFile(name, parentId, payload, existingId=null) {
     : `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id`;
   const res = await fetch(url, { method: existingId?'PATCH':'POST', headers:{ Authorization:'Bearer '+gdriveToken }, body:fm });
   return res.ok ? (await res.json()).id : null;
+}
+
+/* ════════════════════════════════════════════════
+   ONE-TIME CLEANUP — merge duplicate day folders
+   Fixes folders that were already duplicated by the race condition
+   before the lock above existed. Safe to run more than once.
+════════════════════════════════════════════════ */
+async function runDuplicateFolderCleanup() {
+  if (!gdriveToken) { alert('Connect Google Drive first.'); return; }
+  if (!confirm('This scans your Drive for duplicate day folders (e.g. two "2026-07-03" folders), merges their contents into one, and removes the empty duplicate. This can take a minute. Continue?')) return;
+  try {
+    setSyncState('syncing');
+    const rootId = await getRaqibRoot();
+    const yearFolders = await _listFolders(rootId);
+    let mergedCount = 0, movedFiles = 0;
+
+    for (const yf of yearFolders) {
+      const dayFolders = await _listFolders(yf.id);
+      const groups = {};
+      dayFolders.forEach(f => { (groups[f.name] = groups[f.name] || []).push(f); });
+
+      for (const name in groups) {
+        const dupes = groups[name];
+        if (dupes.length < 2) continue;
+
+        // Score each duplicate: prefer the one with real data.json content,
+        // then the one with more subfolders/files.
+        const info = [];
+        for (const d of dupes) {
+          const dataFileId = await _findFileInFolder('data.json', d.id);
+          let data = null, score = 0;
+          if (dataFileId) {
+            data = await _fetchJsonFile(dataFileId);
+            if (data) {
+              score += 1 + (data.tasks?.length||0) + (data.nawafil?.length||0)
+                + Object.keys(data.prayers||{}).length + Object.keys(data.wirdCounts||{}).length
+                + Object.keys(data.practicesDone||{}).length + Object.keys(data.journal||{}).length;
+            }
+          }
+          const children = await _listFolders(d.id);
+          score += children.length;
+          info.push({ folder: d, dataFileId, data, score });
+        }
+        const best = info.reduce((a, b) => (b.score > a.score ? b : a));
+
+        for (const item of info) {
+          if (item.folder.id === best.folder.id) continue;
+
+          // If the duplicate had data the "best" folder is missing, keep it.
+          if (item.data && !best.data) {
+            await _upsertJsonFile('data.json', best.folder.id, item.data, null);
+            best.data = item.data;
+          }
+
+          // Move any other children (Images/Videos subfolders, stray files) into "best".
+          const listUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(`'${item.folder.id}' in parents and trashed=false`)}&fields=files(id,name,mimeType)&pageSize=1000`;
+          const lr = await _driveGet(listUrl);
+          const ld = await lr.json();
+          for (const child of (ld.files || [])) {
+            if (child.name === 'data.json') continue; // duplicate copy, dropped with the folder
+            if (child.mimeType === 'application/vnd.google-apps.folder' && (child.name === 'Images' || child.name === 'Videos')) {
+              const targetSub = await _findOrMakeFolder(child.name, best.folder.id);
+              const subListUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(`'${child.id}' in parents and trashed=false`)}&fields=files(id)&pageSize=1000`;
+              const slr = await _driveGet(subListUrl);
+              const sld = await slr.json();
+              for (const f of (sld.files || [])) {
+                await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?addParents=${targetSub}&removeParents=${child.id}`,
+                  { method: 'PATCH', headers: { Authorization: 'Bearer ' + gdriveToken } });
+                movedFiles++;
+              }
+            } else {
+              await fetch(`https://www.googleapis.com/drive/v3/files/${child.id}?addParents=${best.folder.id}&removeParents=${item.folder.id}`,
+                { method: 'PATCH', headers: { Authorization: 'Bearer ' + gdriveToken } });
+              movedFiles++;
+            }
+          }
+
+          // Trash the now-empty duplicate folder.
+          await fetch(`https://www.googleapis.com/drive/v3/files/${item.folder.id}`, {
+            method: 'PATCH',
+            headers: { Authorization: 'Bearer ' + gdriveToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ trashed: true }),
+          });
+          mergedCount++;
+        }
+
+        // Clear caches so subsequent reads/writes resolve to the surviving folder.
+        delete _dayFolderCache[name];
+        delete _dayImgFolderCache[name];
+        delete _dayVideoFolderCache[name];
+      }
+    }
+
+    setSyncState('ok');
+    alert(mergedCount > 0
+      ? `Merged ${mergedCount} duplicate folder(s) and moved ${movedFiles} file(s). Pulling fresh data now…`
+      : 'No duplicate day folders found — you\'re all clear.');
+    if (mergedCount > 0) await drivePull(true);
+  } catch (e) {
+    console.error('Duplicate cleanup failed:', e);
+    setSyncState('error');
+    alert('Cleanup failed: ' + e.message);
+  }
 }
 
 /* push one day */
@@ -7341,6 +7499,7 @@ function openSettings() {
         Every change syncs automatically within 1–2 seconds. Your data lives only in Drive.
       </div>
       <button class="s-btn" onclick="drivePull()">⬇ Pull latest from Drive</button>
+      <button class="s-btn" onclick="runDuplicateFolderCleanup()">🧹 Fix duplicate day folders</button>
       <button class="s-btn danger" onclick="driveDisconnect()">Disconnect</button>`}
     </div>
     <div class="s-section">
