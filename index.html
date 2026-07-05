@@ -4983,6 +4983,10 @@ function renderLearnLanguage(el) {
     <div class="fc" onclick="openAddLanguageModal()">+ Add language</div>
   </div>`;
 
+  if (lang) {
+    h += `<div style="font-size:12px;color:var(--ink4);margin:-10px 0 18px;cursor:pointer" onclick="openEditLanguageLevelModal()">${lang.level ? `🎯 ${esc(lang.level)} · edit` : '+ set a level or goal (e.g. exam prep)'}</div>`;
+  }
+
   el.innerHTML = h;
   const body = document.createElement('div');
   el.appendChild(body);
@@ -5043,7 +5047,12 @@ function openAddLanguageModal() {
     </div>
     <div class="fg">
       <label class="fl">Language name</label>
-      <input type="text" class="fi" id="lang-new-name" placeholder="e.g. Japanese" onkeydown="if(event.key==='Enter'){event.preventDefault();submitAddLanguage();}" />
+      <input type="text" class="fi" id="lang-new-name" placeholder="e.g. Japanese" />
+    </div>
+    <div class="fg">
+      <label class="fl">Level / goal <span style="font-weight:400;opacity:0.55">(optional)</span></label>
+      <input type="text" class="fi" id="lang-new-level" placeholder="e.g. B2 — prepping for DELF B2" onkeydown="if(event.key==='Enter'){event.preventDefault();submitAddLanguage();}" />
+      <div style="font-size:12px;color:var(--ink4);margin-top:6px;line-height:1.5">This shapes the daily phrase — a level/exam here gets you harder, more exam-relevant content instead of beginner basics.</div>
     </div>
     <div class="modal-footer">
       <button class="mf-btn" onclick="closeModal()">Cancel</button>
@@ -5055,10 +5064,14 @@ function openAddLanguageModal() {
 function submitAddLanguage() {
   const name = (document.getElementById('lang-new-name')?.value || '').trim();
   if (!name) return;
+  const level = (document.getElementById('lang-new-level')?.value || '').trim();
   const id = 'lang-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
   if (!DB.profile.langList) DB.profile.langList = [];
-  if (!DB.profile.langList.find(l => l.id === id)) {
-    DB.profile.langList.push({ id, name });
+  const existing = DB.profile.langList.find(l => l.id === id);
+  if (existing) {
+    existing.level = level;
+  } else {
+    DB.profile.langList.push({ id, name, level });
   }
   DB.profile.langActive = id;
   markUnsaved();
@@ -5131,12 +5144,16 @@ function last30LangPhrases(langId) {
 // Background call to Groq for one short daily phrase. Fully separate from the
 // assistant chat's ACTION-patch system — this is its own self-contained loop,
 // same pattern as generateReadTopics but far lighter (no depth/length knobs).
-async function generateLangPhrase(langName, langId) {
+async function generateLangPhrase(langName, langId, level) {
   const recent = last30LangPhrases(langId);
   const queued = (DB.langQueue[langId] || []).map(p => p.phrase);
   const avoid = [...recent, ...queued];
 
-  const prompt = `Give one short, genuinely useful everyday phrase or expression in ${langName} for a daily language-learning habit app. Do not repeat or closely resemble any of these already-used or queued phrases: ${avoid.length ? avoid.join('; ') : '(none yet)'}. Return ONLY a single JSON object with exactly these keys: "phrase" (the phrase written in ${langName}, using its native script if it has one, plus a simple transliteration in parentheses if the script isn't Latin), "meaning" (short English translation, one line), "usage" (one short sentence on when or how you'd actually use this in conversation). No preamble, no markdown code fences, no extra text before or after the JSON.`;
+  const levelLine = level
+    ? `The learner's level/goal is: "${level}". Calibrate difficulty and register to that exactly — if it names an exam (e.g. DELF, DALF, TOEFL, IELTS), favor the kind of vocabulary, connectors, and register that exam actually tests (e.g. for DELF/DALF: argumentation connectors, nuanced opinion phrases, formal register) rather than beginner/tourist basics.`
+    : `No level was given — keep it generally useful for an everyday learner.`;
+
+  const prompt = `Give one short, genuinely useful phrase or expression in ${langName} for a daily language-learning habit app. ${levelLine} Do not repeat or closely resemble any of these already-used or queued phrases: ${avoid.length ? avoid.join('; ') : '(none yet)'}. Return ONLY a single JSON object with exactly these keys: "phrase" (the phrase written in ${langName}, using its native script if it has one, plus a simple transliteration in parentheses if the script isn't Latin), "meaning" (short English translation, one line), "usage" (one short sentence on when or how you'd actually use this, calibrated to the stated level/goal). No preamble, no markdown code fences, no extra text before or after the JSON.`;
 
   const raw = await aiCallGroq(
     'You are a content generator for a daily language-learning habit app. Always respond with a single valid JSON object only, nothing else.',
@@ -5164,7 +5181,7 @@ async function manualGenerateLangPhrase() {
   const originalText = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
   try {
-    const item = await generateLangPhrase(lang.name, lang.id);
+    const item = await generateLangPhrase(lang.name, lang.id, lang.level);
     if (!DB.langQueue) DB.langQueue = {};
     if (!DB.langQueue[lang.id]) DB.langQueue[lang.id] = [];
     DB.langQueue[lang.id].push(item);
@@ -5177,6 +5194,31 @@ async function manualGenerateLangPhrase() {
     _langGenInFlight = false;
     if (btn) { btn.disabled = false; btn.textContent = originalText; }
   }
+}
+
+function openEditLanguageLevelModal() {
+  const lang = activeLang();
+  if (!lang) return;
+  document.getElementById('modal-content').innerHTML = `
+    <div class="modal-title">${esc(lang.name)} — level / goal</div>
+    <div class="fg">
+      <label class="fl">Level / goal</label>
+      <input type="text" class="fi" id="lang-edit-level" placeholder="e.g. B2 — prepping for DELF B2" value="${esc(lang.level || '')}" onkeydown="if(event.key==='Enter'){event.preventDefault();submitEditLanguageLevel();}" />
+    </div>
+    <div class="modal-footer">
+      <button class="mf-btn" onclick="closeModal()">Cancel</button>
+      <button class="mf-btn pri" onclick="submitEditLanguageLevel()">Save</button>
+    </div>`;
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+function submitEditLanguageLevel() {
+  const lang = activeLang();
+  if (!lang) return;
+  lang.level = (document.getElementById('lang-edit-level')?.value || '').trim();
+  markUnsaved();
+  closeModal();
+  renderSection();
 }
 
 // Opens a picker modal so nothing gets generated until the user explicitly
