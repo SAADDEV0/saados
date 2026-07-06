@@ -17,7 +17,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600&family=Outfit:wght@300;400;500;600&family=Noto+Naskh+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 /* ──────────────────────────────────────────────
    TOKENS
@@ -78,6 +78,7 @@
 
   --serif: 'Cormorant Garamond', Georgia, serif;
   --sans:  'Outfit', sans-serif;
+  --quran-font: 'Noto Naskh Arabic', 'Traditional Arabic', serif;
 
   --ease: cubic-bezier(0.4,0,0.2,1);
   --ease-spring: cubic-bezier(0.34,1.56,0.64,1);
@@ -1417,6 +1418,71 @@ textarea.fi { resize: vertical; min-height: 80px; }
   margin: 26px 0 10px 0;
 }
 .art-body .art-h:first-child { margin-top: 0; }
+
+/* ── Quran reading (Read section) ── */
+.qr-stats {
+  display: flex; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.qr-stat {
+  flex: 1; min-width: 84px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  text-align: center;
+}
+.qr-stat-num { font-family: var(--serif); font-size: 20px; font-weight: 600; color: var(--text); }
+.qr-stat-label { font-size: 10px; letter-spacing: 0.4px; text-transform: uppercase; color: var(--ink4); margin-top: 2px; }
+.qr-pace-row { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+.qr-pace-label { font-size: 12px; color: var(--ink4); }
+.qr-pace-btn {
+  font-family: var(--sans); font-size: 12px; font-weight: 500;
+  padding: 5px 12px; border-radius: 20px;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--text2); cursor: pointer; transition: all 0.15s var(--ease);
+}
+.qr-pace-btn:hover { border-color: var(--gold); color: var(--gold); }
+.qr-pace-btn.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.qr-page-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: 4px;
+}
+.qr-surah-label { font-family: var(--serif); font-size: 13px; font-style: italic; color: var(--ink3); margin: 18px 0 8px; }
+.qr-surah-label:first-child { margin-top: 0; }
+.qr-arabic-page {
+  font-family: var(--quran-font);
+  direction: rtl;
+  text-align: right;
+  font-size: 22px;
+  line-height: 2.15;
+  color: var(--text);
+  margin-bottom: 22px;
+}
+.qr-ayah { cursor: pointer; border-radius: 4px; padding: 1px 2px; transition: background 0.15s; }
+.qr-ayah:hover { background: var(--gold-glow); }
+.qr-ayah.starred { background: var(--gold-glow); color: var(--gold2); }
+.qr-ayah-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--sans); font-size: 11px; font-weight: 500;
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 1px solid var(--border2); color: var(--ink3);
+  margin: 0 4px; vertical-align: middle;
+}
+.qr-hint { font-size: 12px; color: var(--ink4); margin-bottom: 18px; text-align: center; }
+.qr-loading { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 60px 0; color: var(--ink4); font-size: 13px; }
+.qr-spinner {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 2.5px solid var(--border); border-top-color: var(--gold);
+  animation: qr-spin 0.8s linear infinite;
+}
+@keyframes qr-spin { to { transform: rotate(360deg); } }
+.qr-khatm-banner {
+  text-align: center; padding: 20px; margin-bottom: 20px;
+  background: var(--gold-glow); border: 1px solid var(--gold);
+  border-radius: var(--radius);
+}
+
 .prac-dots {
   display: flex; gap: 2px; flex-wrap: wrap;
   margin-top: 6px;
@@ -3354,19 +3420,18 @@ const HARDCODED_CID = '111426887413-md2gvq2djc7p7qqgp57p5v0s1eichp8b.apps.google
 let DB = {
   profile: { name:'', theme:'light', fontSize:'medium', timezone:'Africa/Casablanca',
     readCategories: [], readCustomCategories: [], readDepth: 'standard',
-    langList: [], langActive: null },
+    quranPagesPerDay: 2, quranNextPage: 1, quranKhatmCount: 0, quranTotalPagesRead: 0 },
   days: {}, practices: [], wird: JSON.parse(JSON.stringify(DEFAULT_WIRD)),
   gdrive: { connected:false, clientId:HARDCODED_CID, lastSync:null },
   onboarded: false,
   mal: { budget: 0, expenses: [] },
   readQueue: [],
-  langQueue: {},
 };
 let currentSection = 'niyyah';
 let mizanPeriod = 'today'; // 'today' | '7d' | '30d' | '365d'
 let currentDate = todayStr();
 let sijjilMode = 'write'; // 'write' | 'memories' | 'gallery'
-let readMode = 'articles'; // 'articles' | 'language'
+let readMode = 'articles'; // 'articles' | 'quran'
 let sjSearchQuery = '';
 let sijjilDate = todayStr(); // independent date for journal write mode
 let gdriveToken = null;
@@ -3839,7 +3904,7 @@ function shiftDay(n) {
 }
 function goToday() { currentDate=todayStr(); renderHero(); renderSection(); }
 function getDay(s) {
-  if(!DB.days[s]) DB.days[s]={ niyyah:'', tasks:[], prayers:{}, practicesDone:{}, wirdCounts:{}, focusTime:{}, totalFocusSec:0, journal:{text:'',tags:[],images:[],videos:[]}, nawafil:[], readTopic:null, langTopic:null };
+  if(!DB.days[s]) DB.days[s]={ niyyah:'', tasks:[], prayers:{}, practicesDone:{}, wirdCounts:{}, focusTime:{}, totalFocusSec:0, journal:{text:'',tags:[],images:[],videos:[]}, nawafil:[], readTopic:null, quranTopic:null };
   const d = DB.days[s];
   if(!d.nawafil) d.nawafil = [];
   if(!d.journal) d.journal = {text:'',tags:[],images:[],videos:[]};
@@ -4694,15 +4759,15 @@ function renderRead(el) {
 
   h += `<div class="sj-mode-row">
     <button class="sj-mode-btn ${readMode==='articles'?'active':''}" onclick="setReadMode('articles')">📖 Articles</button>
-    <button class="sj-mode-btn ${readMode==='language'?'active':''}" onclick="setReadMode('language')">🗣 Language</button>
+    <button class="sj-mode-btn ${readMode==='quran'?'active':''}" onclick="setReadMode('quran')">📗 Quran</button>
   </div>`;
 
   el.innerHTML = h;
   const body = document.createElement('div');
   el.appendChild(body);
 
-  if (readMode === 'language') {
-    renderLearnLanguage(body);
+  if (readMode === 'quran') {
+    renderReadQuran(body);
   } else {
     renderReadArticles(body);
   }
@@ -4799,6 +4864,278 @@ function appendToSijjil(ds, block) {
   if (!day.journal) day.journal = { text: '', tags: [], images: [], videos: [] };
   const existing = (day.journal.text || '').trim();
   day.journal.text = existing ? existing + '\n\n' + block : block;
+}
+
+/* ════════════════════════════════════════════════
+   READ — Quran mode: N pages a day, continuous progress
+   Text is fetched from the alquran.cloud API (edition:
+   "quran-simple" — clean script, no complex ligatures) —
+   but ONLY when the user presses "Read today's pages".
+   Nothing is fetched on app launch or on tab switch.
+════════════════════════════════════════════════ */
+const QURAN_TOTAL_PAGES = 604;
+const QURAN_EDITION = 'quran-simple';
+const QURAN_PACE_PRESETS = [2, 4, 6];
+let quranShowDoneForm = false;
+let _quranLoading = false;
+
+function ensureQuranDefaults() {
+  if (DB.profile.quranPagesPerDay == null) DB.profile.quranPagesPerDay = 2;
+  if (DB.profile.quranNextPage == null) DB.profile.quranNextPage = 1;
+  if (DB.profile.quranKhatmCount == null) DB.profile.quranKhatmCount = 0;
+  if (DB.profile.quranTotalPagesRead == null) DB.profile.quranTotalPagesRead = 0;
+}
+
+function renderReadQuran(el) {
+  ensureQuranDefaults();
+  const ds = todayStr();
+  const day = getDay(ds);
+  const topic = day.quranTopic;
+  const streak = getQuranStreak();
+  const pagesPerDay = DB.profile.quranPagesPerDay;
+  const nextPage = DB.profile.quranNextPage;
+  const khatmCount = DB.profile.quranKhatmCount;
+  const pagesRead = Math.max(0, nextPage - 1);
+  const pctComplete = Math.min(100, Math.round((pagesRead / QURAN_TOTAL_PAGES) * 100));
+
+  let h = `<div class="qr-stats">
+    <div class="qr-stat"><div class="qr-stat-num">${pagesRead}<span style="font-size:12px;color:var(--ink4)">/${QURAN_TOTAL_PAGES}</span></div><div class="qr-stat-label">Pages read</div></div>
+    <div class="qr-stat"><div class="qr-stat-num">${pctComplete}%</div><div class="qr-stat-label">Completed</div></div>
+    <div class="qr-stat"><div class="qr-stat-num">${khatmCount}</div><div class="qr-stat-label">Khatm${khatmCount === 1 ? '' : 's'}</div></div>
+  </div>`;
+
+  if (streak > 0) {
+    h += `<div class="prac-streak" style="font-size:13px;margin-bottom:18px">🔥 ${streak}-day Quran streak</div>`;
+  }
+
+  h += `<div class="qr-pace-row">
+    <span class="qr-pace-label">Pages per day:</span>
+    ${QURAN_PACE_PRESETS.map(p => `<button class="qr-pace-btn ${pagesPerDay === p ? 'on' : ''}" onclick="setQuranPace(${p})">${p}</button>`).join('')}
+    <button class="qr-pace-btn ${!QURAN_PACE_PRESETS.includes(pagesPerDay) ? 'on' : ''}" onclick="openQuranCustomPaceModal()">${!QURAN_PACE_PRESETS.includes(pagesPerDay) ? pagesPerDay + ' (custom)' : 'Custom…'}</button>
+  </div>`;
+
+  el.innerHTML = h;
+  const body = document.createElement('div');
+  el.appendChild(body);
+
+  if (topic && topic.done) {
+    renderQuranDoneState(body, topic);
+  } else if (topic && topic.pages) {
+    renderQuranReadingView(body, topic);
+  } else if (_quranLoading) {
+    body.innerHTML = `<div class="qr-loading"><div class="qr-spinner"></div><div>Fetching pages ${nextPage}–${Math.min(QURAN_TOTAL_PAGES, nextPage + pagesPerDay - 1)}…</div></div>`;
+  } else {
+    const endPreview = Math.min(QURAN_TOTAL_PAGES, nextPage + pagesPerDay - 1);
+    body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 0 40px;gap:18px;text-align:center">
+      <div style="font-size:44px">📗</div>
+      <div style="font-family:var(--serif);font-size:20px;font-weight:500;color:var(--text)">Today's pages: ${nextPage}${endPreview !== nextPage ? '–' + endPreview : ''}</div>
+      <div style="font-size:14px;color:var(--ink4);max-width:280px;line-height:1.6">Nothing is loaded until you tap below.</div>
+      <button class="submit-btn" style="margin-top:8px" onclick="loadQuranPages()">📖 Read today's pages</button>
+    </div>`;
+  }
+}
+
+function setQuranPace(p) {
+  DB.profile.quranPagesPerDay = p;
+  markUnsaved();
+  renderSection();
+}
+
+function openQuranCustomPaceModal() {
+  document.getElementById('modal-content').innerHTML = `
+    <div class="modal-title">Custom pace</div>
+    <div class="fg">
+      <label class="fl">Pages per day</label>
+      <input type="number" class="fi" id="quran-custom-pace" min="1" max="${QURAN_TOTAL_PAGES}" value="${DB.profile.quranPagesPerDay || 2}" onkeydown="if(event.key==='Enter'){event.preventDefault();submitQuranCustomPace();}" />
+    </div>
+    <div class="modal-footer">
+      <button class="mf-btn" onclick="closeModal()">Cancel</button>
+      <button class="mf-btn pri" onclick="submitQuranCustomPace()">Save</button>
+    </div>`;
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+function submitQuranCustomPace() {
+  const val = parseInt(document.getElementById('quran-custom-pace')?.value, 10);
+  if (!val || val < 1 || val > QURAN_TOTAL_PAGES) return;
+  DB.profile.quranPagesPerDay = val;
+  markUnsaved();
+  closeModal();
+  renderSection();
+}
+
+// Fetches exactly one Quran page from the API. Only ever called from
+// loadQuranPages(), which is only ever called by the explicit button press —
+// never on section load, tab switch, or app launch.
+async function fetchQuranPage(pageNum) {
+  const res = await fetch(`https://api.alquran.cloud/v1/page/${pageNum}/${QURAN_EDITION}`);
+  if (!res.ok) throw new Error('Quran API error: ' + res.status);
+  const data = await res.json();
+  const ayahs = (data.data && data.data.ayahs) || [];
+  return {
+    pageNumber: pageNum,
+    ayahs: ayahs.map(a => ({
+      surahNum: a.surah?.number,
+      surahName: a.surah?.englishName,
+      surahNameAr: a.surah?.name,
+      numberInSurah: a.numberInSurah,
+      text: a.text,
+      juz: a.juz,
+    })),
+  };
+}
+
+async function loadQuranPages() {
+  if (_quranLoading) return;
+  ensureQuranDefaults();
+  const ds = todayStr();
+  const day = getDay(ds);
+  if (day.quranTopic && day.quranTopic.pages) return; // already loaded for today
+
+  _quranLoading = true;
+  renderSection();
+
+  try {
+    const startPage = DB.profile.quranNextPage;
+    const endPage = Math.min(QURAN_TOTAL_PAGES, startPage + DB.profile.quranPagesPerDay - 1);
+    const pageNums = [];
+    for (let p = startPage; p <= endPage; p++) pageNums.push(p);
+
+    const pages = await Promise.all(pageNums.map(fetchQuranPage));
+
+    day.quranTopic = { startPage, endPage, pages, done: false, starredAyah: null, reaction: null };
+    markUnsaved();
+  } catch (e) {
+    console.error('Quran fetch failed:', e);
+    aiToast('✕ Could not load Quran pages — check your connection', 'err');
+  } finally {
+    _quranLoading = false;
+    renderSection();
+  }
+}
+
+function renderQuranReadingView(el, topic) {
+  let h = `<div class="qr-hint">Tap a verse to mark it as today's key verse ⭐</div>`;
+
+  let lastSurah = null;
+  h += `<div class="qr-arabic-page">`;
+  topic.pages.forEach(page => {
+    page.ayahs.forEach(a => {
+      if (a.surahNum !== lastSurah) {
+        h += `<div class="qr-surah-label">﴾ ${esc(a.surahName || '')} — ${esc(a.surahNameAr || '')} ﴿</div>`;
+        lastSurah = a.surahNum;
+      }
+      const isStarred = topic.starredAyah && topic.starredAyah.surahNum === a.surahNum && topic.starredAyah.numberInSurah === a.numberInSurah;
+      h += `<span class="qr-ayah ${isStarred ? 'starred' : ''}" onclick="starQuranAyah(${a.surahNum},${a.numberInSurah})">${esc(a.text)}<span class="qr-ayah-num">${a.numberInSurah}</span></span> `;
+    });
+  });
+  h += `</div>`;
+
+  h += `<div style="font-size:13px;color:var(--ink3);margin-bottom:18px">Pages ${topic.startPage}${topic.endPage !== topic.startPage ? '–' + topic.endPage : ''}</div>`;
+
+  if (quranShowDoneForm) {
+    h += `<div class="fg"><label class="fl">One sentence — what stuck with you? <span style="font-weight:400;opacity:0.55">(optional)</span></label>
+      <input type="text" class="fi" id="quran-reaction" placeholder="Optional…" /></div>
+      <div style="display:flex;gap:10px">
+        <button class="s-btn" onclick="submitQuranDone(true)">Skip</button>
+        <button class="submit-btn" style="margin:0" onclick="submitQuranDone(false)">Save</button>
+      </div>`;
+  } else {
+    h += `<button class="submit-btn" onclick="quranShowDoneForm=true;renderSection()">✓ Done Reading</button>`;
+  }
+
+  el.innerHTML = h;
+}
+
+// Marking a verse is just a local UI selection until "Done" is pressed —
+// no need to push to Drive on every tap.
+function starQuranAyah(surahNum, numberInSurah) {
+  const ds = todayStr();
+  const day = getDay(ds);
+  if (!day.quranTopic) return;
+  let ayah = null;
+  for (const page of day.quranTopic.pages) {
+    ayah = page.ayahs.find(a => a.surahNum === surahNum && a.numberInSurah === numberInSurah);
+    if (ayah) break;
+  }
+  if (!ayah) return;
+  day.quranTopic.starredAyah = { surahNum, numberInSurah, surahName: ayah.surahName, surahNameAr: ayah.surahNameAr, text: ayah.text };
+  renderSection();
+}
+
+function renderQuranDoneState(el, topic) {
+  let h = `<div class="drive-status-pill"><div class="ds-dot g"></div>Done for today — pages ${topic.startPage}${topic.endPage !== topic.startPage ? '–' + topic.endPage : ''}</div>`;
+
+  if (topic.starredAyah) {
+    h += `<div style="margin-top:20px">
+      <div style="font-size:13px;color:var(--text3);letter-spacing:0.3px;text-transform:uppercase;margin-bottom:8px">Today's verse</div>
+      <div class="qr-arabic-page" style="margin-bottom:8px">${esc(topic.starredAyah.text)}</div>
+      <div style="font-size:13px;color:var(--ink4)">${esc(topic.starredAyah.surahName || '')} ${topic.starredAyah.surahNum}:${topic.starredAyah.numberInSurah}</div>
+    </div>`;
+  }
+  if (topic.reaction) {
+    h += `<div style="margin-top:14px;font-size:14px;color:var(--text2);font-style:italic">"${esc(topic.reaction)}"</div>`;
+  }
+  el.innerHTML = h;
+}
+
+function getQuranStreak() {
+  let s = 0; const t = new Date(currentDate + 'T12:00:00');
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(t); d.setDate(d.getDate() - i);
+    const ds = d.toISOString().split('T')[0];
+    const dd = getDayRO(ds);
+    if (dd?.quranTopic?.done) s++; else if (i > 0) break;
+  }
+  return s;
+}
+
+function submitQuranDone(skip) {
+  const ds = todayStr();
+  const day = getDay(ds);
+  const topic = day.quranTopic;
+  if (!topic || !topic.pages) return;
+
+  const reactionInput = document.getElementById('quran-reaction');
+  const reaction = (!skip && reactionInput) ? reactionInput.value.trim() : '';
+
+  topic.done = true;
+  topic.reaction = reaction || null;
+  quranShowDoneForm = false;
+
+  // "Most important verse" — whatever the user starred, falling back to the
+  // last ayah of the reading if nothing was starred.
+  let verse = topic.starredAyah;
+  if (!verse) {
+    const lastPage = topic.pages[topic.pages.length - 1];
+    const lastAyah = lastPage && lastPage.ayahs[lastPage.ayahs.length - 1];
+    if (lastAyah) verse = { surahNum: lastAyah.surahNum, numberInSurah: lastAyah.numberInSurah, surahName: lastAyah.surahName, text: lastAyah.text };
+    topic.starredAyah = verse || null;
+  }
+
+  // Advance the continuous page pointer — independent of the calendar date,
+  // so changing pace never loses or duplicates pages.
+  const pagesRead = topic.endPage - topic.startPage + 1;
+  ensureQuranDefaults();
+  DB.profile.quranTotalPagesRead += pagesRead;
+  let justFinishedKhatm = false;
+  if (topic.endPage >= QURAN_TOTAL_PAGES) {
+    DB.profile.quranKhatmCount += 1;
+    DB.profile.quranNextPage = 1;
+    justFinishedKhatm = true;
+  } else {
+    DB.profile.quranNextPage = topic.endPage + 1;
+  }
+
+  // Auto-log to Sijjil: pages read + the key verse + optional reflection.
+  let block = `📗 Quran: read pages ${topic.startPage}${topic.endPage !== topic.startPage ? '–' + topic.endPage : ''}`;
+  if (verse) block += `\n⭐ ${verse.surahName} ${verse.surahNum}:${verse.numberInSurah} — ${verse.text}`;
+  if (reaction) block += `\n${reaction}`;
+  if (justFinishedKhatm) block += `\n🎉 Khatm completed! (#${DB.profile.quranKhatmCount})`;
+  appendToSijjil(ds, block);
+
+  markUnsaved();
+  renderSection();
 }
 
 function last30ReadTitles() {
@@ -4953,272 +5290,6 @@ async function manualGenerateReadTopics(opts) {
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = originalText; }
   }
-}
-
-/* ════════════════════════════════════════════════
-   READ — Language mode: one short phrase a day
-════════════════════════════════════════════════ */
-const LANG_QUICK_PICKS = ['Arabic','English','French','Spanish','German','Turkish','Urdu','Indonesian'];
-let langShowDoneForm = false;
-let _langGenInFlight = false;
-
-function activeLang() {
-  const list = DB.profile.langList || [];
-  return list.find(l => l.id === DB.profile.langActive) || null;
-}
-
-function renderLearnLanguage(el) {
-  const lang = activeLang();
-  const streak = getLangStreak();
-  const list = DB.profile.langList || [];
-
-  let h = '';
-  if (streak > 0) {
-    h += `<div class="prac-streak" style="font-size:13px;margin-bottom:18px">🔥 ${streak}-day language streak</div>`;
-  }
-
-  // Language switcher — chips, tap to switch anytime, plus a chip to add a new one.
-  h += `<div class="filter-row">
-    ${list.map(l => `<div class="fc ${l.id===DB.profile.langActive?'on':''}" onclick="switchLang('${l.id}')">${esc(l.name)}</div>`).join('')}
-    <div class="fc" onclick="openAddLanguageModal()">+ Add language</div>
-  </div>`;
-
-  if (lang) {
-    h += `<div style="font-size:12px;color:var(--ink4);margin:-10px 0 18px;cursor:pointer" onclick="openEditLanguageLevelModal()">${lang.level ? `🎯 ${esc(lang.level)} · edit` : '+ set a level or goal (e.g. exam prep)'}</div>`;
-  }
-
-  el.innerHTML = h;
-  const body = document.createElement('div');
-  el.appendChild(body);
-
-  if (!lang) {
-    body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 0 40px;gap:18px;text-align:center">
-      <div style="font-size:44px">🗣</div>
-      <div style="font-family:var(--serif);font-size:20px;font-weight:500;color:var(--text)">No language yet</div>
-      <div style="font-size:14px;color:var(--ink4);max-width:260px;line-height:1.6">Add a language to get one short, useful phrase a day — no lessons, no levels.</div>
-      <button class="submit-btn" style="margin-top:8px" onclick="openAddLanguageModal()">+ Add a language</button>
-    </div>`;
-    return;
-  }
-
-  ensureTodayLangTopic();
-  const ds = todayStr();
-  const day = getDay(ds);
-  const topic = day.langTopic && day.langTopic.langId === lang.id ? day.langTopic : null;
-
-  if (!topic) {
-    body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 0 40px;gap:18px;text-align:center">
-      <div style="font-size:44px">🗣</div>
-      <div style="font-family:var(--serif);font-size:20px;font-weight:500;color:var(--text)">No phrase for today yet</div>
-      <div style="font-size:14px;color:var(--ink4);max-width:260px;line-height:1.6">Get one short ${esc(lang.name)} phrase, its meaning, and when to use it.</div>
-      <button class="submit-btn" style="margin-top:8px" id="lang-gen-btn" onclick="manualGenerateLangPhrase()">✦ Generate today's phrase</button>
-    </div>`;
-  } else {
-    let bh = `<span class="prac-tag" style="display:inline-block;margin-bottom:12px">${esc(topic.langName)}</span>
-    <div style="font-family:var(--serif);font-size:30px;font-weight:500;line-height:1.3;margin-bottom:10px;color:var(--text)">${esc(topic.phrase)}</div>
-    <div style="font-size:15px;color:var(--text2);margin-bottom:18px">${esc(topic.meaning)}</div>
-    <div style="font-size:13px;color:var(--text3);letter-spacing:0.3px;text-transform:uppercase;margin-bottom:6px">When to use it</div>
-    <div class="art-body" style="font-size:15px;line-height:1.7;color:var(--text2);margin-bottom:28px">${esc(topic.usage)}</div>`;
-
-    if (topic.done) {
-      bh += `<div class="drive-status-pill"><div class="ds-dot g"></div>Done for today${topic.reaction ? ` — "${esc(topic.reaction)}"` : ''}</div>`;
-    } else if (langShowDoneForm) {
-      bh += `<div class="fg"><label class="fl">One sentence — used it, or just noted it?</label>
-        <input type="text" class="fi" id="lang-reaction" placeholder="Optional…" /></div>
-      <div style="display:flex;gap:10px">
-        <button class="s-btn" onclick="submitLangDone(true)">Skip</button>
-        <button class="submit-btn" style="margin:0" onclick="submitLangDone(false)">Save</button>
-      </div>`;
-    } else {
-      bh += `<button class="submit-btn" onclick="langShowDoneForm=true;renderSection()">✓ Learned it</button>`;
-    }
-    body.innerHTML = bh;
-  }
-}
-
-function openAddLanguageModal() {
-  document.getElementById('modal-content').innerHTML = `
-    <div class="modal-title">Add a language</div>
-    <div class="fg">
-      <label class="fl">Quick picks</label>
-      <div class="filter-row" id="lang-quick-picks">
-        ${LANG_QUICK_PICKS.map(n => `<div class="fc" onclick="document.getElementById('lang-new-name').value='${esc(n)}'">${esc(n)}</div>`).join('')}
-      </div>
-    </div>
-    <div class="fg">
-      <label class="fl">Language name</label>
-      <input type="text" class="fi" id="lang-new-name" placeholder="e.g. Japanese" />
-    </div>
-    <div class="fg">
-      <label class="fl">Level / goal <span style="font-weight:400;opacity:0.55">(optional)</span></label>
-      <input type="text" class="fi" id="lang-new-level" placeholder="e.g. B2 — prepping for DELF B2" onkeydown="if(event.key==='Enter'){event.preventDefault();submitAddLanguage();}" />
-      <div style="font-size:12px;color:var(--ink4);margin-top:6px;line-height:1.5">This shapes the daily phrase — a level/exam here gets you harder, more exam-relevant content instead of beginner basics.</div>
-    </div>
-    <div class="modal-footer">
-      <button class="mf-btn" onclick="closeModal()">Cancel</button>
-      <button class="mf-btn pri" onclick="submitAddLanguage()">Add</button>
-    </div>`;
-  document.getElementById('modal-bg').classList.add('open');
-}
-
-function submitAddLanguage() {
-  const name = (document.getElementById('lang-new-name')?.value || '').trim();
-  if (!name) return;
-  const level = (document.getElementById('lang-new-level')?.value || '').trim();
-  const id = 'lang-' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-  if (!DB.profile.langList) DB.profile.langList = [];
-  const existing = DB.profile.langList.find(l => l.id === id);
-  if (existing) {
-    existing.level = level;
-  } else {
-    DB.profile.langList.push({ id, name, level });
-  }
-  DB.profile.langActive = id;
-  markUnsaved();
-  closeModal();
-  renderSection();
-}
-
-function switchLang(id) {
-  DB.profile.langActive = id;
-  markUnsaved();
-  renderSection();
-}
-
-function ensureTodayLangTopic() {
-  const ds = todayStr();
-  const day = getDay(ds);
-  const lang = activeLang();
-  if (!lang) return;
-  if (!DB.langQueue) DB.langQueue = {};
-  if (!DB.langQueue[lang.id]) DB.langQueue[lang.id] = [];
-  const alreadyForThisLang = day.langTopic && day.langTopic.langId === lang.id;
-  if (!alreadyForThisLang && DB.langQueue[lang.id].length > 0) {
-    const next = DB.langQueue[lang.id].shift();
-    day.langTopic = { langId: lang.id, langName: lang.name, phrase: next.phrase, meaning: next.meaning, usage: next.usage, done: false, reaction: null };
-    markUnsaved();
-  }
-}
-
-function getLangStreak() {
-  let s = 0; const t = new Date(currentDate + 'T12:00:00');
-  for (let i = 0; i < 365; i++) {
-    const d = new Date(t); d.setDate(d.getDate() - i);
-    const ds = d.toISOString().split('T')[0];
-    const dd = getDayRO(ds);
-    if (dd?.langTopic?.done) s++; else if (i > 0) break;
-  }
-  return s;
-}
-
-function submitLangDone(skip) {
-  const ds = todayStr();
-  const day = getDay(ds);
-  if (!day.langTopic) return;
-  const reactionInput = document.getElementById('lang-reaction');
-  const reaction = (!skip && reactionInput) ? reactionInput.value.trim() : '';
-  day.langTopic.done = true;
-  day.langTopic.reaction = reaction || null;
-  langShowDoneForm = false;
-
-  let block = `🗣 ${day.langTopic.langName} phrase of the day: ${day.langTopic.phrase} — ${day.langTopic.meaning}`;
-  if (reaction) block += `\n${reaction}`;
-  appendToSijjil(ds, block);
-
-  markUnsaved();
-  renderSection();
-}
-
-function last30LangPhrases(langId) {
-  const phrases = [];
-  const t = new Date(currentDate + 'T12:00:00');
-  for (let i = 0; i < 30; i++) {
-    const d = new Date(t); d.setDate(d.getDate() - i);
-    const ds = d.toISOString().split('T')[0];
-    const dt = DB.days[ds]?.langTopic;
-    if (dt && dt.langId === langId && dt.phrase) phrases.push(dt.phrase);
-  }
-  return phrases;
-}
-
-// Background call to Groq for one short daily phrase. Fully separate from the
-// assistant chat's ACTION-patch system — this is its own self-contained loop,
-// same pattern as generateReadTopics but far lighter (no depth/length knobs).
-async function generateLangPhrase(langName, langId, level) {
-  const recent = last30LangPhrases(langId);
-  const queued = (DB.langQueue[langId] || []).map(p => p.phrase);
-  const avoid = [...recent, ...queued];
-
-  const levelLine = level
-    ? `The learner's level/goal is: "${level}". Calibrate difficulty and register to that exactly — if it names an exam (e.g. DELF, DALF, TOEFL, IELTS), favor the kind of vocabulary, connectors, and register that exam actually tests (e.g. for DELF/DALF: argumentation connectors, nuanced opinion phrases, formal register) rather than beginner/tourist basics.`
-    : `No level was given — keep it generally useful for an everyday learner.`;
-
-  const prompt = `Give one short, genuinely useful phrase or expression in ${langName} for a daily language-learning habit app. ${levelLine} Do not repeat or closely resemble any of these already-used or queued phrases: ${avoid.length ? avoid.join('; ') : '(none yet)'}. Return ONLY a single JSON object with exactly these keys: "phrase" (the phrase written in ${langName}, using its native script if it has one, plus a simple transliteration in parentheses if the script isn't Latin), "meaning" (short English translation, one line), "usage" (one short sentence on when or how you'd actually use this, calibrated to the stated level/goal). No preamble, no markdown code fences, no extra text before or after the JSON.`;
-
-  const raw = await aiCallGroq(
-    'You are a content generator for a daily language-learning habit app. Always respond with a single valid JSON object only, nothing else.',
-    prompt,
-    400
-  );
-
-  let clean = raw.replace(/```json|```/gi, '').trim();
-  const first = clean.indexOf('{');
-  if (first !== -1) clean = clean.slice(first);
-  const last = clean.lastIndexOf('}');
-  if (last !== -1) clean = clean.slice(0, last + 1);
-
-  const item = JSON.parse(clean);
-  if (!item || !item.phrase || !item.meaning) throw new Error('AI returned an incomplete phrase — try again');
-  return { phrase: item.phrase, meaning: item.meaning, usage: item.usage || '' };
-}
-
-async function manualGenerateLangPhrase() {
-  const lang = activeLang();
-  if (!lang) return;
-  if (_langGenInFlight) return;
-  _langGenInFlight = true;
-  const btn = document.getElementById('lang-gen-btn');
-  const originalText = btn ? btn.textContent : '';
-  if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
-  try {
-    const item = await generateLangPhrase(lang.name, lang.id, lang.level);
-    if (!DB.langQueue) DB.langQueue = {};
-    if (!DB.langQueue[lang.id]) DB.langQueue[lang.id] = [];
-    DB.langQueue[lang.id].push(item);
-    markUnsaved();
-    ensureTodayLangTopic();
-    renderSection();
-  } catch (e) {
-    aiToast('✕ ' + (e.message || 'Generation failed'), 'err');
-  } finally {
-    _langGenInFlight = false;
-    if (btn) { btn.disabled = false; btn.textContent = originalText; }
-  }
-}
-
-function openEditLanguageLevelModal() {
-  const lang = activeLang();
-  if (!lang) return;
-  document.getElementById('modal-content').innerHTML = `
-    <div class="modal-title">${esc(lang.name)} — level / goal</div>
-    <div class="fg">
-      <label class="fl">Level / goal</label>
-      <input type="text" class="fi" id="lang-edit-level" placeholder="e.g. B2 — prepping for DELF B2" value="${esc(lang.level || '')}" onkeydown="if(event.key==='Enter'){event.preventDefault();submitEditLanguageLevel();}" />
-    </div>
-    <div class="modal-footer">
-      <button class="mf-btn" onclick="closeModal()">Cancel</button>
-      <button class="mf-btn pri" onclick="submitEditLanguageLevel()">Save</button>
-    </div>`;
-  document.getElementById('modal-bg').classList.add('open');
-}
-
-function submitEditLanguageLevel() {
-  const lang = activeLang();
-  if (!lang) return;
-  lang.level = (document.getElementById('lang-edit-level')?.value || '').trim();
-  markUnsaved();
-  closeModal();
-  renderSection();
 }
 
 // Opens a picker modal so nothing gets generated until the user explicitly
