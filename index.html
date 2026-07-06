@@ -17,7 +17,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600&family=Outfit:wght@300;400;500;600&family=Noto+Naskh+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 /* ──────────────────────────────────────────────
    TOKENS
@@ -78,7 +78,6 @@
 
   --serif: 'Cormorant Garamond', Georgia, serif;
   --sans:  'Outfit', sans-serif;
-  --quran-font: 'Noto Naskh Arabic', 'Traditional Arabic', serif;
 
   --ease: cubic-bezier(0.4,0,0.2,1);
   --ease-spring: cubic-bezier(0.34,1.56,0.64,1);
@@ -115,7 +114,7 @@ body {
   transform: translateX(-50%);
   z-index: 799;
   width: min(calc(100vw - 32px), var(--col));
-  display: none;
+  display: flex;
   align-items: center;
   gap: 8px;
   background: var(--surface);
@@ -125,29 +124,6 @@ body {
   box-shadow: 0 4px 24px rgba(20,18,14,0.10), 0 1px 4px rgba(20,18,14,0.06);
   transition: border-color 0.2s, box-shadow 0.2s;
 }
-#ai-bar.show { display: flex; }
-
-/* Fixed top-left button that reveals the AI bar */
-#ai-corner-btn {
-  position: fixed;
-  top: 16px;
-  left: 16px;
-  z-index: 950;
-  width: 40px; height: 40px;
-  border-radius: 50%;
-  border: 1.5px solid var(--border);
-  background: var(--surface);
-  color: var(--ink3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition: all 0.2s var(--ease);
-}
-#ai-corner-btn:hover,
-#ai-corner-btn.active { border-color: var(--gold); color: var(--gold); background: var(--surface2); }
 #ai-bar:focus-within {
   border-color: var(--gold);
   box-shadow: 0 4px 28px rgba(176,120,24,0.15), 0 1px 4px rgba(20,18,14,0.06);
@@ -1407,82 +1383,6 @@ textarea.fi { resize: vertical; min-height: 80px; }
   text-transform: uppercase;
 }
 .prac-streak { font-size: 11px; color: var(--ink4); }
-.art-body { white-space: normal; }
-.art-body .art-p { margin: 0 0 16px 0; }
-.art-body .art-p:last-child { margin-bottom: 0; }
-.art-body .art-h {
-  font-family: var(--serif);
-  font-weight: 600;
-  font-size: 18px;
-  color: var(--text);
-  margin: 26px 0 10px 0;
-}
-.art-body .art-h:first-child { margin-top: 0; }
-
-/* ── Quran reading (Read section) ── */
-.qr-stats {
-  display: flex; gap: 10px; flex-wrap: wrap;
-  margin-bottom: 18px;
-}
-.qr-stat {
-  flex: 1; min-width: 84px;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px;
-  text-align: center;
-}
-.qr-stat-num { font-family: var(--serif); font-size: 20px; font-weight: 600; color: var(--text); }
-.qr-stat-label { font-size: 10px; letter-spacing: 0.4px; text-transform: uppercase; color: var(--ink4); margin-top: 2px; }
-.qr-pace-row { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
-.qr-pace-label { font-size: 12px; color: var(--ink4); }
-.qr-pace-btn {
-  font-family: var(--sans); font-size: 12px; font-weight: 500;
-  padding: 5px 12px; border-radius: 20px;
-  border: 1px solid var(--border); background: var(--surface);
-  color: var(--text2); cursor: pointer; transition: all 0.15s var(--ease);
-}
-.qr-pace-btn:hover { border-color: var(--gold); color: var(--gold); }
-.qr-pace-btn.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
-.qr-page-head {
-  display: flex; justify-content: space-between; align-items: baseline;
-  margin-bottom: 4px;
-}
-.qr-surah-label { font-family: var(--serif); font-size: 13px; font-style: italic; color: var(--ink3); margin: 18px 0 8px; }
-.qr-surah-label:first-child { margin-top: 0; }
-.qr-arabic-page {
-  font-family: var(--quran-font);
-  direction: rtl;
-  text-align: right;
-  font-size: 22px;
-  line-height: 2.15;
-  color: var(--text);
-  margin-bottom: 22px;
-}
-.qr-ayah { cursor: pointer; border-radius: 4px; padding: 1px 2px; transition: background 0.15s; }
-.qr-ayah:hover { background: var(--gold-glow); }
-.qr-ayah.starred { background: var(--gold-glow); color: var(--gold2); }
-.qr-ayah-num {
-  display: inline-flex; align-items: center; justify-content: center;
-  font-family: var(--sans); font-size: 11px; font-weight: 500;
-  width: 20px; height: 20px; border-radius: 50%;
-  border: 1px solid var(--border2); color: var(--ink3);
-  margin: 0 4px; vertical-align: middle;
-}
-.qr-hint { font-size: 12px; color: var(--ink4); margin-bottom: 18px; text-align: center; }
-.qr-loading { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 60px 0; color: var(--ink4); font-size: 13px; }
-.qr-spinner {
-  width: 28px; height: 28px; border-radius: 50%;
-  border: 2.5px solid var(--border); border-top-color: var(--gold);
-  animation: qr-spin 0.8s linear infinite;
-}
-@keyframes qr-spin { to { transform: rotate(360deg); } }
-.qr-khatm-banner {
-  text-align: center; padding: 20px; margin-bottom: 20px;
-  background: var(--gold-glow); border: 1px solid var(--gold);
-  border-radius: var(--radius);
-}
-
 .prac-dots {
   display: flex; gap: 2px; flex-wrap: wrap;
   margin-top: 6px;
@@ -3178,9 +3078,6 @@ canvas { width: 100%; display: block; }
 </head>
 <body>
 
-<!-- Fixed top-left button: reveals/hides the AI command bar -->
-<button id="ai-corner-btn" onclick="aiChatToggle()" title="SaadOs AI">✦</button>
-
 <!-- ════════════════════════════════
      ONBOARDING
 ════════════════════════════════ -->
@@ -3215,6 +3112,7 @@ canvas { width: 100%; display: block; }
       <div class="hero-today-pill" onclick="goToday()">Today</div>
       <button class="hero-day-btn" onclick="shiftDay(1)">›</button>
     </div>
+    <button class="hero-ai-btn" id="hero-ai-btn" onclick="aiChatToggle()" title="SaadOs AI">✦</button>
     <button class="hero-settings-btn" onclick="openSettings()">⚙</button>
     <div id="sync-status-hero">
       <div class="sync-dot idle" id="sync-dot"></div>
@@ -3419,8 +3317,7 @@ const TIMEZONES = [
 const HARDCODED_CID = '111426887413-md2gvq2djc7p7qqgp57p5v0s1eichp8b.apps.googleusercontent.com';
 let DB = {
   profile: { name:'', theme:'light', fontSize:'medium', timezone:'Africa/Casablanca',
-    readCategories: [], readCustomCategories: [], readDepth: 'standard',
-    quranPagesPerDay: 2, quranNextPage: 1, quranKhatmCount: 0, quranTotalPagesRead: 0 },
+    readCategories: READ_CATEGORIES.map(c=>c.id), readCustomCategories: [], readDepth: 'standard' },
   days: {}, practices: [], wird: JSON.parse(JSON.stringify(DEFAULT_WIRD)),
   gdrive: { connected:false, clientId:HARDCODED_CID, lastSync:null },
   onboarded: false,
@@ -3431,7 +3328,6 @@ let currentSection = 'niyyah';
 let mizanPeriod = 'today'; // 'today' | '7d' | '30d' | '365d'
 let currentDate = todayStr();
 let sijjilMode = 'write'; // 'write' | 'memories' | 'gallery'
-let readMode = 'articles'; // 'articles' | 'quran'
 let sjSearchQuery = '';
 let sijjilDate = todayStr(); // independent date for journal write mode
 let gdriveToken = null;
@@ -3460,18 +3356,6 @@ function setSyncState(s, detail) {
   // auto-clear "Saved" after 2s
   if(s === 'ok') setTimeout(()=>{ if(syncState==='ok'){ setSyncState('idle'); }}, 2000);
 }
-
-// Guard against losing unsaved changes: if the user closes/refreshes the tab
-// while a save to Drive is still in flight (or has failed), warn them first.
-// Without this, a refresh right after typing/tapping something cancels the
-// in-flight network write and that change never reaches Drive.
-window.addEventListener('beforeunload', (e) => {
-  if (syncState === 'syncing' || _unsyncedChanges) {
-    e.preventDefault();
-    e.returnValue = '';
-    return '';
-  }
-});
 
 /* ════════════════════════════════════════════════
    MARK CHANGED → IMMEDIATE DRIVE PUSH
@@ -3524,29 +3408,7 @@ function markUnsaved(isJournalText = false) {
   }
 }
 
-// ── Push serialization ──────────────────────────────────────────────
-// markUnsaved() can fire _doPush() many times in quick succession (every
-// task/prayer/wird toggle pushes instantly). If two pushes ever ran at
-// the same time, they could each race to look up/create the SAME day
-// folder in Drive before either had cached the result — and both would
-// end up creating a duplicate "YYYY-MM-DD" folder, with the two writes
-// landing in different folders (one of which then looks "empty").
-// This queue guarantees only one drivePush() is ever in flight; any
-// pushes requested while one is running are coalesced into a single
-// follow-up run once it finishes.
-let _pushInFlight = null;
-let _pushQueued = false;
-
-function _doPush() {
-  if (_pushInFlight) { _pushQueued = true; return _pushInFlight; }
-  _pushInFlight = _runPush().finally(() => {
-    _pushInFlight = null;
-    if (_pushQueued) { _pushQueued = false; _doPush(); }
-  });
-  return _pushInFlight;
-}
-
-async function _runPush() {
+async function _doPush() {
   try {
     if (!gdriveToken || Date.now() > gdriveTokenExpiry - 2 * 60 * 1000) {
       await silentDriveAuth(false);
@@ -3858,33 +3720,7 @@ function focusSaveTime() {
 /* ════════════════════════════════════════════════
    DATE
 ════════════════════════════════════════════════ */
-// "Today" is always Morocco's calendar date — computed explicitly via the
-// Africa/Casablanca timezone, never the device's own system timezone. This
-// keeps the app's day boundary identical on every device (PC, phone, etc.)
-// regardless of how that device's clock/timezone is configured.
-function todayStr() {
-  try {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Casablanca' }).format(new Date());
-  } catch(e) {
-    return new Date().toISOString().split('T')[0];
-  }
-}
-// Current Casablanca wall-clock time as minutes-since-midnight — used for
-// prayer countdown/next-prayer logic so it's never affected by the device's
-// own local timezone setting.
-function _casablancaMinutesNow() {
-  try {
-    const parts = new Intl.DateTimeFormat('en-GB', {
-      timeZone: 'Africa/Casablanca', hour: '2-digit', minute: '2-digit', hour12: false
-    }).formatToParts(new Date());
-    const h = parseInt(parts.find(p => p.type === 'hour').value, 10);
-    const m = parseInt(parts.find(p => p.type === 'minute').value, 10);
-    return h * 60 + m;
-  } catch(e) {
-    const now = new Date();
-    return now.getHours() * 60 + now.getMinutes();
-  }
-}
+function todayStr() { return new Date().toISOString().split('T')[0]; }
 function getTimezone() { return DB.profile.timezone || 'Africa/Casablanca'; }
 function getCurrentTimeStr() {
   try {
@@ -3904,7 +3740,7 @@ function shiftDay(n) {
 }
 function goToday() { currentDate=todayStr(); renderHero(); renderSection(); }
 function getDay(s) {
-  if(!DB.days[s]) DB.days[s]={ niyyah:'', tasks:[], prayers:{}, practicesDone:{}, wirdCounts:{}, focusTime:{}, totalFocusSec:0, journal:{text:'',tags:[],images:[],videos:[]}, nawafil:[], readTopic:null, quranTopic:null };
+  if(!DB.days[s]) DB.days[s]={ niyyah:'', tasks:[], prayers:{}, practicesDone:{}, wirdCounts:{}, focusTime:{}, totalFocusSec:0, journal:{text:'',tags:[],images:[],videos:[]}, nawafil:[], readTopic:null };
   const d = DB.days[s];
   if(!d.nawafil) d.nawafil = [];
   if(!d.journal) d.journal = {text:'',tags:[],images:[],videos:[]};
@@ -4343,7 +4179,8 @@ function _parseHM(hm) {
 }
 
 function _getNextPrayer(times) {
-  const cur = _casablancaMinutesNow();
+  const now = new Date();
+  const cur = now.getHours()*60 + now.getMinutes();
   const order = ['fajr','dhuhr','asr','maghrib','isha'];
   for(const id of order){
     if(_parseHM(times[id]) > cur) return id;
@@ -4352,7 +4189,8 @@ function _getNextPrayer(times) {
 }
 
 function _formatCountdown(times, nextId) {
-  const cur = _casablancaMinutesNow();
+  const now = new Date();
+  const cur = now.getHours()*60 + now.getMinutes();
   let target = _parseHM(times[nextId]);
   if(target <= cur) target += 24*60; // tomorrow
   let diff = target - cur;
@@ -4751,55 +4589,31 @@ function getAllReadCategories() {
 }
 
 function renderRead(el) {
-  let h = `<div class="s-head">
-    <div class="s-kicker">Daily Reading</div>
-    <div class="s-title">Read</div>
-    <div class="s-sub">One new idea a day</div>
-  </div>`;
-
-  h += `<div class="sj-mode-row">
-    <button class="sj-mode-btn ${readMode==='articles'?'active':''}" onclick="setReadMode('articles')">📖 Articles</button>
-    <button class="sj-mode-btn ${readMode==='quran'?'active':''}" onclick="setReadMode('quran')">📗 Quran</button>
-  </div>`;
-
-  el.innerHTML = h;
-  const body = document.createElement('div');
-  el.appendChild(body);
-
-  if (readMode === 'quran') {
-    renderReadQuran(body);
-  } else {
-    renderReadArticles(body);
-  }
-}
-
-function setReadMode(mode) { readMode = mode; renderSection(); }
-
-function renderReadArticles(el) {
   ensureTodayReadTopic();
   const ds = todayStr();
   const day = getDay(ds);
   const topic = day.readTopic;
   const streak = getReadStreak();
 
-  let h = '';
+  let h = `<div class="s-head">
+    <div class="s-kicker">Daily Reading</div>
+    <div class="s-title">Read</div>
+    <div class="s-sub">One new idea a day</div>
+  </div>`;
 
   if (streak > 0) {
     h += `<div class="prac-streak" style="font-size:13px;margin-bottom:18px">🔥 ${streak}-day reading streak</div>`;
   }
 
   if (!topic) {
-    h += `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 0 40px;gap:18px;text-align:center">
-      <div style="font-size:44px">📖</div>
-      <div style="font-family:var(--serif);font-size:20px;font-weight:500;color:var(--text)">No article for today yet</div>
-      <div style="font-size:14px;color:var(--ink4);max-width:260px;line-height:1.6">Pick a category and topic, then generate your reading for the day.</div>
-      <button class="submit-btn" style="margin-top:8px" onclick="openGenerateArticleModal()">✦ Generate today's article</button>
+    h += `<div style="text-align:center;padding:60px 0;font-family:var(--serif);font-style:italic;font-size:16px;color:var(--ink4)">
+      Preparing today's topic…<br><span style="font-size:12px;font-style:normal">Check back in a moment.</span>
     </div>`;
   } else {
     const catLabel = (getAllReadCategories().find(c => c.id === topic.category) || { en: topic.category }).en;
     h += `<span class="prac-tag" style="display:inline-block;margin-bottom:12px">${esc(catLabel || '')}</span>
     <div style="font-family:var(--serif);font-size:28px;font-weight:500;line-height:1.25;margin-bottom:18px;color:var(--text)">${esc(topic.title)}</div>
-    <div class="art-body" style="font-size:15px;line-height:1.85;color:var(--text2);margin-bottom:28px">${formatArticleContent(topic.content)}</div>`;
+    <div style="font-size:15px;line-height:1.85;color:var(--text2);white-space:pre-wrap;margin-bottom:28px">${esc(topic.content)}</div>`;
 
     if (topic.done) {
       h += `<div class="drive-status-pill"><div class="ds-dot g"></div>Done for today${topic.reaction ? ` — "${esc(topic.reaction)}"` : ''}</div>`;
@@ -4821,12 +4635,15 @@ function renderReadArticles(el) {
 function ensureTodayReadTopic() {
   const ds = todayStr();
   const day = getDay(ds);
-  if (!day.readTopic && DB.readQueue && DB.readQueue.length > 0) {
-    const next = DB.readQueue.shift();
-    day.readTopic = { title: next.title, content: next.content, category: next.category, depth: next.depth, done: false, reaction: null };
-    markUnsaved();
+  if (!day.readTopic) {
+    if (DB.readQueue && DB.readQueue.length > 0) {
+      const next = DB.readQueue.shift();
+      day.readTopic = { title: next.title, content: next.content, category: next.category, depth: next.depth, done: false, reaction: null };
+      markUnsaved();
+    }
   }
   if (!DB.readQueue) DB.readQueue = [];
+  if (DB.readQueue.length <= 2) generateReadTopics();
 }
 
 function getReadStreak() {
@@ -4866,364 +4683,6 @@ function appendToSijjil(ds, block) {
   day.journal.text = existing ? existing + '\n\n' + block : block;
 }
 
-/* ════════════════════════════════════════════════
-   READ — Quran mode: N pages a day, continuous progress
-   Text is fetched from the alquran.cloud API (edition:
-   "quran-simple" — clean script, no complex ligatures) —
-   but ONLY when the user presses "Read today's pages".
-   Nothing is fetched on app launch or on tab switch.
-════════════════════════════════════════════════ */
-const QURAN_TOTAL_PAGES = 604;
-const QURAN_EDITION = 'quran-simple';
-const QURAN_PACE_PRESETS = [2, 4, 6];
-let quranShowDoneForm = false;
-let _quranLoading = false;
-
-function ensureQuranDefaults() {
-  if (DB.profile.quranPagesPerDay == null) DB.profile.quranPagesPerDay = 2;
-  if (DB.profile.quranNextPage == null) DB.profile.quranNextPage = 1;
-  if (DB.profile.quranKhatmCount == null) DB.profile.quranKhatmCount = 0;
-  if (DB.profile.quranTotalPagesRead == null) DB.profile.quranTotalPagesRead = 0;
-}
-
-function renderReadQuran(el) {
-  ensureQuranDefaults();
-  const ds = todayStr();
-  const day = getDay(ds);
-  const topic = day.quranTopic;
-  const streak = getQuranStreak();
-  const pagesPerDay = DB.profile.quranPagesPerDay;
-  const nextPage = DB.profile.quranNextPage;
-  const khatmCount = DB.profile.quranKhatmCount;
-  const pagesRead = Math.max(0, nextPage - 1);
-  const pctComplete = Math.min(100, Math.round((pagesRead / QURAN_TOTAL_PAGES) * 100));
-
-  let h = `<div class="qr-stats">
-    <div class="qr-stat"><div class="qr-stat-num">${pagesRead}<span style="font-size:12px;color:var(--ink4)">/${QURAN_TOTAL_PAGES}</span></div><div class="qr-stat-label">Pages read</div></div>
-    <div class="qr-stat"><div class="qr-stat-num">${pctComplete}%</div><div class="qr-stat-label">Completed</div></div>
-    <div class="qr-stat"><div class="qr-stat-num">${khatmCount}</div><div class="qr-stat-label">Khatm${khatmCount === 1 ? '' : 's'}</div></div>
-  </div>`;
-
-  if (streak > 0) {
-    h += `<div class="prac-streak" style="font-size:13px;margin-bottom:18px">🔥 ${streak}-day Quran streak</div>`;
-  }
-
-  h += `<div class="qr-pace-row">
-    <span class="qr-pace-label">Pages per day:</span>
-    ${QURAN_PACE_PRESETS.map(p => `<button class="qr-pace-btn ${pagesPerDay === p ? 'on' : ''}" onclick="setQuranPace(${p})">${p}</button>`).join('')}
-    <button class="qr-pace-btn ${!QURAN_PACE_PRESETS.includes(pagesPerDay) ? 'on' : ''}" onclick="openQuranCustomPaceModal()">${!QURAN_PACE_PRESETS.includes(pagesPerDay) ? pagesPerDay + ' (custom)' : 'Custom…'}</button>
-  </div>`;
-
-  el.innerHTML = h;
-  const body = document.createElement('div');
-  el.appendChild(body);
-
-  if (topic && topic.done) {
-    renderQuranDoneState(body, topic);
-  } else if (topic && topic.pages) {
-    renderQuranReadingView(body, topic);
-  } else if (_quranLoading) {
-    body.innerHTML = `<div class="qr-loading"><div class="qr-spinner"></div><div>Fetching pages ${nextPage}–${Math.min(QURAN_TOTAL_PAGES, nextPage + pagesPerDay - 1)}…</div></div>`;
-  } else {
-    const endPreview = Math.min(QURAN_TOTAL_PAGES, nextPage + pagesPerDay - 1);
-    body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 0 40px;gap:18px;text-align:center">
-      <div style="font-size:44px">📗</div>
-      <div style="font-family:var(--serif);font-size:20px;font-weight:500;color:var(--text)">Today's pages: ${nextPage}${endPreview !== nextPage ? '–' + endPreview : ''}</div>
-      <div style="font-size:14px;color:var(--ink4);max-width:280px;line-height:1.6">Nothing is loaded until you tap below.</div>
-      <button class="submit-btn" style="margin-top:8px" onclick="loadQuranPages()">📖 Read today's pages</button>
-    </div>`;
-  }
-}
-
-function setQuranPace(p) {
-  DB.profile.quranPagesPerDay = p;
-  markUnsaved();
-  renderSection();
-}
-
-function openQuranCustomPaceModal() {
-  document.getElementById('modal-content').innerHTML = `
-    <div class="modal-title">Custom pace</div>
-    <div class="fg">
-      <label class="fl">Pages per day</label>
-      <input type="number" class="fi" id="quran-custom-pace" min="1" max="${QURAN_TOTAL_PAGES}" value="${DB.profile.quranPagesPerDay || 2}" onkeydown="if(event.key==='Enter'){event.preventDefault();submitQuranCustomPace();}" />
-    </div>
-    <div class="modal-footer">
-      <button class="mf-btn" onclick="closeModal()">Cancel</button>
-      <button class="mf-btn pri" onclick="submitQuranCustomPace()">Save</button>
-    </div>`;
-  document.getElementById('modal-bg').classList.add('open');
-}
-
-function submitQuranCustomPace() {
-  const val = parseInt(document.getElementById('quran-custom-pace')?.value, 10);
-  if (!val || val < 1 || val > QURAN_TOTAL_PAGES) return;
-  DB.profile.quranPagesPerDay = val;
-  markUnsaved();
-  closeModal();
-  renderSection();
-}
-
-// Fetches exactly one Quran page from the API. Only ever called from
-// loadQuranPages(), which is only ever called by the explicit button press —
-// never on section load, tab switch, or app launch.
-async function fetchQuranPage(pageNum) {
-  const res = await fetch(`https://api.alquran.cloud/v1/page/${pageNum}/${QURAN_EDITION}`);
-  if (!res.ok) throw new Error('Quran API error: ' + res.status);
-  const data = await res.json();
-  const ayahs = (data.data && data.data.ayahs) || [];
-  return {
-    pageNumber: pageNum,
-    ayahs: ayahs.map(a => ({
-      surahNum: a.surah?.number,
-      surahName: a.surah?.englishName,
-      surahNameAr: a.surah?.name,
-      numberInSurah: a.numberInSurah,
-      text: a.text,
-      juz: a.juz,
-    })),
-  };
-}
-
-async function loadQuranPages() {
-  if (_quranLoading) return;
-  ensureQuranDefaults();
-  const ds = todayStr();
-  const day = getDay(ds);
-  if (day.quranTopic && day.quranTopic.pages) return; // already loaded for today
-
-  _quranLoading = true;
-  renderSection();
-
-  try {
-    const startPage = DB.profile.quranNextPage;
-    const endPage = Math.min(QURAN_TOTAL_PAGES, startPage + DB.profile.quranPagesPerDay - 1);
-    const pageNums = [];
-    for (let p = startPage; p <= endPage; p++) pageNums.push(p);
-
-    const pages = await Promise.all(pageNums.map(fetchQuranPage));
-
-    day.quranTopic = { startPage, endPage, pages, done: false, starredAyah: null, reaction: null, _userStarred: false, _sijjilBlock: null };
-    markUnsaved();
-  } catch (e) {
-    console.error('Quran fetch failed:', e);
-    aiToast('✕ Could not load Quran pages — check your connection', 'err');
-  } finally {
-    _quranLoading = false;
-    renderSection();
-  }
-}
-
-function renderQuranReadingView(el, topic) {
-  let h = `<div class="qr-hint">Tap a verse to mark it as today's key verse ⭐</div>`;
-
-  let lastSurah = null;
-  h += `<div class="qr-arabic-page">`;
-  topic.pages.forEach(page => {
-    page.ayahs.forEach(a => {
-      if (a.surahNum !== lastSurah) {
-        h += `<div class="qr-surah-label">﴾ ${esc(a.surahName || '')} — ${esc(a.surahNameAr || '')} ﴿</div>`;
-        lastSurah = a.surahNum;
-      }
-      const isStarred = topic.starredAyah && topic.starredAyah.surahNum === a.surahNum && topic.starredAyah.numberInSurah === a.numberInSurah;
-      h += `<span class="qr-ayah ${isStarred ? 'starred' : ''}" onclick="starQuranAyah(${a.surahNum},${a.numberInSurah})">${esc(a.text)}<span class="qr-ayah-num">${a.numberInSurah}</span></span> `;
-    });
-  });
-  h += `</div>`;
-
-  h += `<div style="font-size:13px;color:var(--ink3);margin-bottom:18px">Pages ${topic.startPage}${topic.endPage !== topic.startPage ? '–' + topic.endPage : ''}</div>`;
-
-  if (quranShowDoneForm) {
-    h += `<div class="fg"><label class="fl">One sentence — what stuck with you? <span style="font-weight:400;opacity:0.55">(optional)</span></label>
-      <input type="text" class="fi" id="quran-reaction" placeholder="Optional…" /></div>
-      <div style="display:flex;gap:10px">
-        <button class="s-btn" onclick="submitQuranDone(true)">Skip</button>
-        <button class="submit-btn" style="margin:0" onclick="submitQuranDone(false)">Save</button>
-      </div>`;
-  } else {
-    h += `<div style="display:flex;gap:10px;flex-wrap:wrap">
-      <button class="submit-btn" style="margin:0" onclick="quranShowDoneForm=true;renderSection()">✓ Done Reading</button>
-      ${topic.endPage < QURAN_TOTAL_PAGES ? `<button class="s-btn" style="width:auto;padding:0 16px" ${_quranLoading ? 'disabled' : ''} onclick="extendQuranReading()">${_quranLoading ? 'Loading…' : '+ Read another page'}</button>` : ''}
-    </div>`;
-  }
-
-  el.innerHTML = h;
-}
-
-// Marking a verse is just a local UI selection until "Done" is pressed —
-// no need to push to Drive on every tap.
-function starQuranAyah(surahNum, numberInSurah) {
-  const ds = todayStr();
-  const day = getDay(ds);
-  if (!day.quranTopic) return;
-  let ayah = null;
-  for (const page of day.quranTopic.pages) {
-    ayah = page.ayahs.find(a => a.surahNum === surahNum && a.numberInSurah === numberInSurah);
-    if (ayah) break;
-  }
-  if (!ayah) return;
-  day.quranTopic.starredAyah = { surahNum, numberInSurah, surahName: ayah.surahName, surahNameAr: ayah.surahNameAr, text: ayah.text };
-  day.quranTopic._userStarred = true;
-  renderSection();
-}
-
-function renderQuranDoneState(el, topic) {
-  let h = `<div class="drive-status-pill"><div class="ds-dot g"></div>Done for today — pages ${topic.startPage}${topic.endPage !== topic.startPage ? '–' + topic.endPage : ''}</div>`;
-
-  if (topic.starredAyah) {
-    h += `<div style="margin-top:20px">
-      <div style="font-size:13px;color:var(--text3);letter-spacing:0.3px;text-transform:uppercase;margin-bottom:8px">Today's verse</div>
-      <div class="qr-arabic-page" style="margin-bottom:8px">${esc(topic.starredAyah.text)}</div>
-      <div style="font-size:13px;color:var(--ink4)">${esc(topic.starredAyah.surahName || '')} ${topic.starredAyah.surahNum}:${topic.starredAyah.numberInSurah}</div>
-    </div>`;
-  }
-  if (topic.reaction) {
-    h += `<div style="margin-top:14px;font-size:14px;color:var(--text2);font-style:italic">"${esc(topic.reaction)}"</div>`;
-  }
-  if (topic.endPage < QURAN_TOTAL_PAGES) {
-    h += `<button class="s-btn" style="width:auto;padding:0 16px;margin-top:20px" ${_quranLoading ? 'disabled' : ''} onclick="extendQuranReading()">${_quranLoading ? 'Loading…' : '+ Read another page'}</button>`;
-  }
-  el.innerHTML = h;
-}
-
-// Builds the Sijjil text block for a Quran reading — shared by the initial
-// Done press and by any later extension of the same day's reading.
-function buildQuranSijjilBlock(topic, justFinishedKhatm) {
-  let block = `📗 Quran: read pages ${topic.startPage}${topic.endPage !== topic.startPage ? '–' + topic.endPage : ''}`;
-  if (topic.starredAyah) block += `\n⭐ ${topic.starredAyah.surahName} ${topic.starredAyah.surahNum}:${topic.starredAyah.numberInSurah} — ${topic.starredAyah.text}`;
-  if (topic.reaction) block += `\n${topic.reaction}`;
-  if (justFinishedKhatm) block += `\n🎉 Khatm completed! (#${DB.profile.quranKhatmCount})`;
-  return block;
-}
-
-// Updates an already-logged Sijjil entry in place (used when extending a day
-// that was already marked Done). Replaces the exact previous block if it's
-// still there untouched; otherwise appends an update rather than duplicating.
-function updateQuranSijjilBlock(ds, topic, justFinishedKhatm) {
-  const day = getDay(ds);
-  if (!day.journal) day.journal = { text: '', tags: [], images: [], videos: [] };
-  const newBlock = buildQuranSijjilBlock(topic, justFinishedKhatm);
-  const oldBlock = topic._sijjilBlock;
-  if (oldBlock && day.journal.text && day.journal.text.includes(oldBlock)) {
-    day.journal.text = day.journal.text.replace(oldBlock, newBlock);
-  } else {
-    const existing = (day.journal.text || '').trim();
-    day.journal.text = existing ? existing + '\n\n' + newBlock : newBlock;
-  }
-  topic._sijjilBlock = newBlock;
-}
-
-// Loads exactly one more page onto today's reading. If today was already
-// marked Done, this also advances the page pointer and Khatm count for that
-// extra page, and rewrites today's Sijjil entry in place to reflect it.
-async function extendQuranReading() {
-  if (_quranLoading) return;
-  const ds = todayStr();
-  const day = getDay(ds);
-  const topic = day.quranTopic;
-  if (!topic || !topic.pages) return;
-  if (topic.endPage >= QURAN_TOTAL_PAGES) return;
-
-  const wasDone = topic.done;
-  const newPageNum = wasDone ? DB.profile.quranNextPage : topic.endPage + 1;
-
-  _quranLoading = true;
-  renderSection();
-
-  try {
-    const page = await fetchQuranPage(newPageNum);
-    topic.pages.push(page);
-    topic.endPage = newPageNum;
-
-    if (!topic._userStarred) {
-      const lastAyah = page.ayahs[page.ayahs.length - 1];
-      if (lastAyah) topic.starredAyah = { surahNum: lastAyah.surahNum, numberInSurah: lastAyah.numberInSurah, surahName: lastAyah.surahName, text: lastAyah.text };
-    }
-
-    if (wasDone) {
-      ensureQuranDefaults();
-      DB.profile.quranTotalPagesRead += 1;
-      let justFinishedKhatm = false;
-      if (newPageNum >= QURAN_TOTAL_PAGES) {
-        DB.profile.quranKhatmCount += 1;
-        DB.profile.quranNextPage = 1;
-        justFinishedKhatm = true;
-      } else {
-        DB.profile.quranNextPage = newPageNum + 1;
-      }
-      updateQuranSijjilBlock(ds, topic, justFinishedKhatm);
-    }
-    // If today wasn't marked Done yet, nothing else to do here — the pointer
-    // and Sijjil entry get written once, at the eventual Done press, and
-    // they'll naturally reflect the now-extended page range.
-
-    markUnsaved();
-  } catch (e) {
-    console.error('Extend Quran reading failed:', e);
-    aiToast('✕ Could not load the next page — check your connection', 'err');
-  } finally {
-    _quranLoading = false;
-    renderSection();
-  }
-}
-
-function getQuranStreak() {
-  let s = 0; const t = new Date(currentDate + 'T12:00:00');
-  for (let i = 0; i < 365; i++) {
-    const d = new Date(t); d.setDate(d.getDate() - i);
-    const ds = d.toISOString().split('T')[0];
-    const dd = getDayRO(ds);
-    if (dd?.quranTopic?.done) s++; else if (i > 0) break;
-  }
-  return s;
-}
-
-function submitQuranDone(skip) {
-  const ds = todayStr();
-  const day = getDay(ds);
-  const topic = day.quranTopic;
-  if (!topic || !topic.pages) return;
-
-  const reactionInput = document.getElementById('quran-reaction');
-  const reaction = (!skip && reactionInput) ? reactionInput.value.trim() : '';
-
-  topic.done = true;
-  topic.reaction = reaction || null;
-  quranShowDoneForm = false;
-
-  // "Most important verse" — whatever the user starred, falling back to the
-  // last ayah of the reading if nothing was starred.
-  let verse = topic.starredAyah;
-  if (!verse) {
-    const lastPage = topic.pages[topic.pages.length - 1];
-    const lastAyah = lastPage && lastPage.ayahs[lastPage.ayahs.length - 1];
-    if (lastAyah) verse = { surahNum: lastAyah.surahNum, numberInSurah: lastAyah.numberInSurah, surahName: lastAyah.surahName, text: lastAyah.text };
-    topic.starredAyah = verse || null;
-  }
-
-  // Advance the continuous page pointer — independent of the calendar date,
-  // so changing pace never loses or duplicates pages.
-  const pagesRead = topic.endPage - topic.startPage + 1;
-  ensureQuranDefaults();
-  DB.profile.quranTotalPagesRead += pagesRead;
-  let justFinishedKhatm = false;
-  if (topic.endPage >= QURAN_TOTAL_PAGES) {
-    DB.profile.quranKhatmCount += 1;
-    DB.profile.quranNextPage = 1;
-    justFinishedKhatm = true;
-  } else {
-    DB.profile.quranNextPage = topic.endPage + 1;
-  }
-
-  // Auto-log to Sijjil: pages read + the key verse + optional reflection.
-  const block = buildQuranSijjilBlock(topic, justFinishedKhatm);
-  appendToSijjil(ds, block);
-  topic._sijjilBlock = block;
-
-  markUnsaved();
-  renderSection();
-}
-
 function last30ReadTitles() {
   const titles = [];
   const t = new Date(currentDate + 'T12:00:00');
@@ -5238,187 +4697,68 @@ function last30ReadTitles() {
 
 // Background-only: pulls more topics from Groq when the queue runs low.
 // Fully separate context from the command/chat AI — only read prefs + titles, nothing else.
-// opts can override the saved profile prefs for a single manual generation,
-// e.g. { categoryIds: ['science'], depthId: 'quick' }, without touching DB.profile.
-
-// Best-effort recovery when the model's JSON didn't parse cleanly — usually
-// because the response got cut off at the token limit partway through the
-// "content" string, or has a stray unescaped quote. Pulls title/content/category
-// out with regex instead of giving up and forcing the user to retry.
-function salvageArticleJson(raw) {
-  if (!raw) return null;
-  let text = raw.replace(/```json|```/gi, '').trim();
-
-  const titleMatch = text.match(/"title"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-  const categoryMatch = text.match(/"category"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-  // Content is the trickiest: grab everything between "content": " and either
-  // the next ',"category"' / closing '"}' or, if truncated, just the rest of the string.
-  const contentMatch = text.match(/"content"\s*:\s*"((?:[^"\\]|\\.)*)/);
-
-  if (!titleMatch || !contentMatch) return null;
-
-  const unescape = s => s.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-
-  let content = contentMatch[1];
-  // If the match ran to the end of input unterminated (truncated response),
-  // trim any half-finished trailing sentence/word so it doesn't end abruptly.
-  if (!text.slice(contentMatch.index + contentMatch[0].length).trim().startsWith('"')) {
-    const lastBreak = Math.max(content.lastIndexOf('. '), content.lastIndexOf('\\n\\n'));
-    if (lastBreak > content.length * 0.5) content = content.slice(0, lastBreak + 1);
-  }
-
-  return {
-    title: unescape(titleMatch[1]),
-    content: unescape(content),
-    category: categoryMatch ? unescape(categoryMatch[1]) : undefined,
-  };
-}
-
-async function generateReadTopics(opts) {
-  if (_readGenInFlight) return { success: false, count: 0, error: 'Already generating' };
+async function generateReadTopics() {
+  if (_readGenInFlight) return;
   _readGenInFlight = true;
   try {
-    const allCats = getAllReadCategories();
-    const overrideCats = opts && opts.categoryIds && opts.categoryIds.length ? opts.categoryIds : null;
-    const enabledIds = overrideCats
-      ? overrideCats
-      : (DB.profile.readCategories && DB.profile.readCategories.length)
-        ? DB.profile.readCategories
-        : allCats.map(c => c.id);
-    const catNames = enabledIds.map(id => (allCats.find(c => c.id === id) || { en: id }).en);
-    const depthId = (opts && opts.depthId) || DB.profile.readDepth || 'standard';
-    const depthInfo = READ_DEPTHS.find(d => d.id === depthId) || READ_DEPTHS[1];
-    const contextHint = (opts && opts.contextHint) || '';
-
-    const recentTitles = last30ReadTitles();
-    const queueTitles = (DB.readQueue || []).map(t => t.title);
-    const avoidTitles = [...recentTitles, ...queueTitles];
-    // Pick one category for this article so the model doesn't have to juggle several.
-    const category = catNames[Math.floor(Math.random() * catNames.length)] || catNames[0];
-
-    const topicLine = contextHint
-      ? `The user specifically wants the article to be about: "${contextHint}". Use the category "${category}" as the broader frame, but focus the content on that topic.`
-      : `Write about any interesting topic within the category "${category}".`;
-
-    const prompt = `Write one article for a daily reading habit app. ${topicLine} Target length: ${depthInfo.words}. Do not repeat or closely resemble any of these already-used or queued titles: ${avoidTitles.length ? avoidTitles.join('; ') : '(none yet)'}. Formatting rules for the "content" field: write in clear, well-structured prose broken into short paragraphs separated by a blank line (\\n\\n); for articles longer than ~800 words, add a few short "## Subheading" lines to break up sections; do not use bullet points or numbered lists; use **bold** sparingly only for genuinely key terms. Return ONLY a single JSON object with exactly these keys: title, content, category. No preamble, no markdown code fences, no extra text before or after the JSON.`;
-
-    // Token budget must scale with the requested word count, or long ("deep")
-    // articles get cut off mid-JSON and fail to parse. ~1.6 tokens/word for
-    // English prose, plus headroom for JSON punctuation/escaping and the title.
-    const depthTokenBudget = { quick: 1800, standard: 4500, deep: 8000 };
-    const maxTokens = depthTokenBudget[depthId] || 4500;
-
-    const raw = await aiCallGroq(
-      'You are a content generator for a daily-reading habit app. Always respond with a single valid JSON object only, nothing else.',
-      prompt,
-      maxTokens
-    );
-
-    // Strip code fences and grab the outermost {...} in case the model adds stray text.
-    let clean = raw.replace(/```json|```/gi, '').trim();
-    const first = clean.indexOf('{');
-    if (first !== -1) clean = clean.slice(first);
-    const last = clean.lastIndexOf('}');
-    if (last !== -1) clean = clean.slice(0, last + 1);
-
-    let item;
-    try {
-      item = JSON.parse(clean);
-    } catch (parseErr) {
-      // Response was likely truncated (hit the token limit) before the closing
-      // brace, or has a dangling comma/quote. Try to salvage title + content
-      // directly with regex instead of failing the whole generation.
-      item = salvageArticleJson(raw);
-      if (!item) throw new Error('AI returned invalid format — try again');
-    }
-
-    if (!item || !item.title || !item.content) {
-      throw new Error('AI returned an incomplete article — try again');
-    }
-
-    const catId = allCats.find(c => c.en === item.category)?.id || enabledIds[0] || 'science';
-    DB.readQueue.push({ title: item.title, content: item.content, category: catId, depth: depthId });
-
-    markUnsaved();
+    await _fetchReadTopics();
     // If the read tab is open and still waiting on a topic, fill it in now.
     if (currentSection === 'read') {
       const ds = todayStr();
       if (!getDay(ds).readTopic && DB.readQueue.length > 0) renderSection();
     }
-    return { success: true, count: 1, error: null };
   } catch (e) {
     console.warn('Read topic generation failed:', e.message);
-    return { success: false, count: 0, error: e.message || 'Generation failed' };
   } finally {
     _readGenInFlight = false;
   }
 }
 
-async function manualGenerateReadTopics(opts) {
-  const btn = document.getElementById('read-gen-btn');
-  if (btn && btn.disabled) return;
-  if (btn) { var originalText = btn.textContent; btn.disabled = true; btn.textContent = 'Generating…'; }
-  try {
-    const result = await generateReadTopics(opts);
-    if (result && result.success) {
-      aiToast(`✓ ${result.count} new article${result.count === 1 ? '' : 's'} added`, 'ok');
-      // Make sure today's topic is actually filled in, then reveal it.
-      if (currentSection === 'read') {
-        ensureTodayReadTopic();
-        closeSettings();
-        renderSection();
+// Shared fetch logic — does the actual Groq call and queues results.
+// Callers are responsible for setting/clearing _readGenInFlight themselves.
+async function _fetchReadTopics() {
+  const allCats = getAllReadCategories();
+  const enabledIds = (DB.profile.readCategories && DB.profile.readCategories.length)
+    ? DB.profile.readCategories
+    : allCats.map(c => c.id);
+  const catNames = enabledIds.map(id => (allCats.find(c => c.id === id) || { en: id }).en);
+  const depthId = DB.profile.readDepth || 'standard';
+  const depthInfo = READ_DEPTHS.find(d => d.id === depthId) || READ_DEPTHS[1];
+
+  const recentTitles = last30ReadTitles();
+  const queueTitles = (DB.readQueue || []).map(t => t.title);
+  const avoidTitles = [...recentTitles, ...queueTitles];
+
+  const prompt = `Generate 10 new short articles for a daily reading habit app. Categories to draw from: ${catNames.join(', ')}. Target length: ${depthInfo.words}. Do not repeat or closely resemble any of these already-used or queued titles: ${avoidTitles.length ? avoidTitles.join('; ') : '(none yet)'}. Return as a JSON array of objects, each with title, content, and category. Return ONLY the JSON array — no preamble, no markdown code fences.`;
+
+  const raw = await aiCallGroq(
+    'You are a content generator for a daily-reading habit app. Always respond with a valid JSON array only, nothing else.',
+    prompt
+  );
+  const clean = raw.replace(/```json|```/g, '').trim();
+  const arr = JSON.parse(clean);
+
+  if (Array.isArray(arr)) {
+    arr.forEach(item => {
+      if (item && item.title && item.content) {
+        const catId = allCats.find(c => c.en === item.category)?.id || enabledIds[0] || 'science';
+        DB.readQueue.push({ title: item.title, content: item.content, category: catId, depth: depthId });
       }
-    } else {
-      aiToast('✕ ' + (result?.error || 'Generation failed'), 'err');
-    }
-  } catch (e) {
-    aiToast('✕ ' + (e.message || 'Generation failed'), 'err');
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = originalText; }
+    });
+    markUnsaved();
   }
 }
 
-// Opens a picker modal so nothing gets generated until the user explicitly
-// confirms which categories + length they want for this article.
-// keepSelected / keepDepth let us re-render after adding a custom category
-// without losing whatever the user had already picked.
-function openGenerateArticleModal(keepSelected, keepDepth) {
-  const allCats = getAllReadCategories();
-  const depthId = keepDepth || DB.profile.readDepth || 'standard';
-
-  document.getElementById('modal-content').innerHTML = `
-    <div class="modal-title">Generate a new article</div>
-    <div class="fg">
-      <label class="fl">Topic hint <span style="font-weight:400;opacity:0.55">(optional)</span></label>
-      <textarea id="gen-art-context" class="fi" rows="3" placeholder="e.g. The psychology of procrastination, black holes, Ottoman history… leave blank for a random pick based on your categories." style="resize:vertical;min-height:72px;font-size:14px"></textarea>
-    </div>
-    <div class="fg">
-      <label class="fl">Categories</label>
-      <div class="filter-row" id="gen-art-cats">
-        ${allCats.map(c => `<div class="fc ${keepSelected && keepSelected.includes(c.id) ? 'on' : ''}" data-id="${esc(c.id)}" onclick="this.classList.toggle('on')">${esc(c.en)}</div>`).join('')}
-      </div>
-      <div style="display:flex;gap:8px;margin-top:10px">
-        <input type="text" class="fi" id="gen-art-new-cat" placeholder="Add custom category…" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addReadCategoryInModal();}" />
-        <button class="s-btn" style="width:auto;padding:0 16px" onclick="addReadCategoryInModal()">Add</button>
-      </div>
-    </div>
-    <div class="fg">
-      <label class="fl">Length</label>
-      <div class="filter-row" id="gen-art-depth">
-        ${READ_DEPTHS.map(d => `<div class="fc ${depthId === d.id ? 'on' : ''}" data-id="${esc(d.id)}" onclick="document.querySelectorAll('#gen-art-depth .fc').forEach(e=>e.classList.remove('on'));this.classList.add('on')">${esc(d.en)} · ${esc(d.sub)}</div>`).join('')}
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="mf-btn" onclick="closeModal()">Cancel</button>
-      <button class="mf-btn pri" id="gen-art-submit" onclick="submitGenerateArticle()">✦ Generate</button>
-    </div>`;
-  document.getElementById('modal-bg').classList.add('open');
+function toggleReadCategory(id) {
+  if (!DB.profile.readCategories) DB.profile.readCategories = [];
+  const i = DB.profile.readCategories.indexOf(id);
+  if (i > -1) DB.profile.readCategories.splice(i, 1); else DB.profile.readCategories.push(id);
+  markUnsaved();
+  openSettings();
 }
 
-// Adds a custom category, then re-renders the modal with it selected,
-// preserving anything else the user had already picked.
-function addReadCategoryInModal() {
-  const inp = document.getElementById('gen-art-new-cat');
+function addReadCategory() {
+  const inp = document.getElementById('read-new-cat');
   const val = (inp?.value || '').trim();
   if (!val) return;
   const id = 'custom-' + val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -5427,50 +4767,51 @@ function addReadCategoryInModal() {
   if (!DB.profile.readCustomCategories.find(c => c.id === id)) {
     DB.profile.readCustomCategories.push({ id, en: val });
   }
+  if (!DB.profile.readCategories) DB.profile.readCategories = [];
+  if (!DB.profile.readCategories.includes(id)) DB.profile.readCategories.push(id);
   markUnsaved();
-
-  const selected = Array.from(document.querySelectorAll('#gen-art-cats .fc.on')).map(e => e.dataset.id);
-  selected.push(id);
-  const depthEl = document.querySelector('#gen-art-depth .fc.on');
-  const depthId = depthEl ? depthEl.dataset.id : (DB.profile.readDepth || 'standard');
-  openGenerateArticleModal(selected, depthId);
-}
-
-async function submitGenerateArticle() {
-  const catIds = Array.from(document.querySelectorAll('#gen-art-cats .fc.on')).map(e => e.dataset.id);
-  if (!catIds.length) { aiToast('✕ Pick at least one category', 'err'); return; }
-  const depthEl = document.querySelector('#gen-art-depth .fc.on');
-  const depthId = depthEl ? depthEl.dataset.id : (DB.profile.readDepth || 'standard');
-  const contextHint = (document.getElementById('gen-art-context')?.value || '').trim();
-
-  const btn = document.getElementById('gen-art-submit');
-  const originalText = btn ? btn.textContent : '';
-  if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
-  try {
-    const result = await generateReadTopics({ categoryIds: catIds, depthId, contextHint });
-    if (result && result.success) {
-      DB.profile.readCategories = catIds;
-      DB.profile.readDepth = depthId;
-      markUnsaved();
-      closeModal();
-      // Pull the freshly generated article into today immediately so the
-      // user sees it right away without any extra step.
-      ensureTodayReadTopic();
-      renderSection();
-    } else {
-      aiToast('✕ ' + (result?.error || 'Generation failed'), 'err');
-    }
-  } catch (e) {
-    aiToast('✕ ' + (e.message || 'Generation failed'), 'err');
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = originalText; }
-  }
+  openSettings();
 }
 
 function setReadDepth(d) {
   DB.profile.readDepth = d;
   markUnsaved();
   openSettings();
+}
+
+// Manual "Generate what should I read today" button in Settings.
+// Forces an immediate Groq fetch (bypassing the queue-length threshold) and,
+// if today doesn't already have a topic, pops one straight in.
+async function manualGenerateRead(btn) {
+  if (_readGenInFlight) return;
+  const ds = todayStr();
+  const day = getDay(ds);
+
+  if (day.readTopic && !day.readTopic.done) {
+    if (!confirm("You already have today's topic queued up. Replace it with a new one?")) return;
+    day.readTopic = null;
+  }
+
+  const orig = btn ? btn.textContent : null;
+  if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
+
+  try {
+    _readGenInFlight = true;
+    await _fetchReadTopics();
+    _readGenInFlight = false;
+    if (!day.readTopic && DB.readQueue.length > 0) {
+      const next = DB.readQueue.shift();
+      day.readTopic = { title: next.title, content: next.content, category: next.category, depth: next.depth, done: false, reaction: null };
+      markUnsaved();
+    }
+    if (btn) btn.textContent = '✓ Ready — check the Read tab';
+    if (currentSection === 'read') renderSection();
+  } catch (e) {
+    _readGenInFlight = false;
+    if (btn) btn.textContent = '⚠ Failed — try again';
+  } finally {
+    setTimeout(() => { if (btn) { btn.disabled = false; btn.textContent = orig; } }, 2500);
+  }
 }
 function get28Day(id) { const r=[]; const t=new Date(currentDate+'T12:00:00'); for(let i=27;i>=0;i--){const d=new Date(t);d.setDate(d.getDate()-i);const ds=d.toISOString().split('T')[0];r.push(!!(getDayRO(ds)?.practicesDone?.[id]));} return r; }
 function incrWird(id) {
@@ -6496,68 +5837,35 @@ async function _driveGet(url) {
   return r;
 }
 
-// In-flight lock: if two calls ask for the same name+parent before the
-// first one has resolved (and cached it upstream), they must share the
-// SAME promise instead of both racing to "find nothing, then create" —
-// that race is what produces duplicate "YYYY-MM-DD" folders in Drive.
-const _folderLookupLocks = {};
-
 async function _findOrMakeFolder(name, parentId) {
-  const key = parentId + '::' + name;
-  if (_folderLookupLocks[key]) return _folderLookupLocks[key];
-  const p = (async () => {
-    const q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
-    const r = await _driveGet(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)&orderBy=createdTime`);
-    const d = await r.json();
-    if(d.files?.[0]?.id) {
-      // If duplicates already exist from before this fix, silently prefer
-      // the oldest one (createdTime asc) so writes/reads converge on a
-      // single folder going forward.
-      return d.files[0].id;
-    }
-    const cr = await fetch('https://www.googleapis.com/drive/v3/files', {
-      method:'POST', headers:{ Authorization:'Bearer '+gdriveToken, 'Content-Type':'application/json' },
-      body: JSON.stringify({ name, mimeType:'application/vnd.google-apps.folder', parents:[parentId] }),
-    });
-    return (await cr.json()).id;
-  })();
-  _folderLookupLocks[key] = p;
-  try {
-    return await p;
-  } finally {
-    // Keep the resolved promise cached briefly isn't needed since callers
-    // (getDayFolder etc.) already cache the result themselves; just clear
-    // the lock so future distinct lookups aren't blocked forever.
-    delete _folderLookupLocks[key];
-  }
+  const q = `name='${name}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
+  const r = await _driveGet(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)`);
+  const d = await r.json();
+  if(d.files?.[0]?.id) return d.files[0].id;
+  const cr = await fetch('https://www.googleapis.com/drive/v3/files', {
+    method:'POST', headers:{ Authorization:'Bearer '+gdriveToken, 'Content-Type':'application/json' },
+    body: JSON.stringify({ name, mimeType:'application/vnd.google-apps.folder', parents:[parentId] }),
+  });
+  return (await cr.json()).id;
 }
 
-let _raqibRootLock = null;
 async function getRaqibRoot() {
   if(_raqibRootId) return _raqibRootId;
-  if(_raqibRootLock) return _raqibRootLock;
-  _raqibRootLock = (async () => {
-    // Search for SaadOs and legacy Raqib folders in a single query
-    const q = `(name='SaadOs' or name='Raqib') and mimeType='application/vnd.google-apps.folder' and trashed=false`;
-    const r = await _driveGet(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)&orderBy=name desc`);
-    const d = await r.json();
-    // Prefer SaadOs over Raqib
-    const saados = d.files?.find(f => f.name === 'SaadOs');
-    const raqib  = d.files?.find(f => f.name === 'Raqib');
-    if(saados?.id) { _raqibRootId = saados.id; return _raqibRootId; }
-    if(raqib?.id)  { _raqibRootId = raqib.id;  return _raqibRootId; }
-    const cr = await fetch('https://www.googleapis.com/drive/v3/files', {
-      method:'POST', headers:{ Authorization:'Bearer '+gdriveToken, 'Content-Type':'application/json' },
-      body: JSON.stringify({ name:'SaadOs', mimeType:'application/vnd.google-apps.folder' }),
-    });
-    _raqibRootId = (await cr.json()).id;
-    return _raqibRootId;
-  })();
-  try {
-    return await _raqibRootLock;
-  } finally {
-    _raqibRootLock = null;
-  }
+  // Search for SaadOs and legacy Raqib folders in a single query
+  const q = `(name='SaadOs' or name='Raqib') and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+  const r = await _driveGet(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)&orderBy=name desc`);
+  const d = await r.json();
+  // Prefer SaadOs over Raqib
+  const saados = d.files?.find(f => f.name === 'SaadOs');
+  const raqib  = d.files?.find(f => f.name === 'Raqib');
+  if(saados?.id) { _raqibRootId = saados.id; return _raqibRootId; }
+  if(raqib?.id)  { _raqibRootId = raqib.id;  return _raqibRootId; }
+  const cr = await fetch('https://www.googleapis.com/drive/v3/files', {
+    method:'POST', headers:{ Authorization:'Bearer '+gdriveToken, 'Content-Type':'application/json' },
+    body: JSON.stringify({ name:'SaadOs', mimeType:'application/vnd.google-apps.folder' }),
+  });
+  _raqibRootId = (await cr.json()).id;
+  return _raqibRootId;
 }
 
 // Raqib/YYYY/YYYY-MM-DD
@@ -6618,109 +5926,6 @@ async function _upsertJsonFile(name, parentId, payload, existingId=null) {
     : `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id`;
   const res = await fetch(url, { method: existingId?'PATCH':'POST', headers:{ Authorization:'Bearer '+gdriveToken }, body:fm });
   return res.ok ? (await res.json()).id : null;
-}
-
-/* ════════════════════════════════════════════════
-   ONE-TIME CLEANUP — merge duplicate day folders
-   Fixes folders that were already duplicated by the race condition
-   before the lock above existed. Safe to run more than once.
-════════════════════════════════════════════════ */
-async function runDuplicateFolderCleanup() {
-  if (!gdriveToken) { alert('Connect Google Drive first.'); return; }
-  if (!confirm('This scans your Drive for duplicate day folders (e.g. two "2026-07-03" folders), merges their contents into one, and removes the empty duplicate. This can take a minute. Continue?')) return;
-  try {
-    setSyncState('syncing');
-    const rootId = await getRaqibRoot();
-    const yearFolders = await _listFolders(rootId);
-    let mergedCount = 0, movedFiles = 0;
-
-    for (const yf of yearFolders) {
-      const dayFolders = await _listFolders(yf.id);
-      const groups = {};
-      dayFolders.forEach(f => { (groups[f.name] = groups[f.name] || []).push(f); });
-
-      for (const name in groups) {
-        const dupes = groups[name];
-        if (dupes.length < 2) continue;
-
-        // Score each duplicate: prefer the one with real data.json content,
-        // then the one with more subfolders/files.
-        const info = [];
-        for (const d of dupes) {
-          const dataFileId = await _findFileInFolder('data.json', d.id);
-          let data = null, score = 0;
-          if (dataFileId) {
-            data = await _fetchJsonFile(dataFileId);
-            if (data) {
-              score += 1 + (data.tasks?.length||0) + (data.nawafil?.length||0)
-                + Object.keys(data.prayers||{}).length + Object.keys(data.wirdCounts||{}).length
-                + Object.keys(data.practicesDone||{}).length + Object.keys(data.journal||{}).length;
-            }
-          }
-          const children = await _listFolders(d.id);
-          score += children.length;
-          info.push({ folder: d, dataFileId, data, score });
-        }
-        const best = info.reduce((a, b) => (b.score > a.score ? b : a));
-
-        for (const item of info) {
-          if (item.folder.id === best.folder.id) continue;
-
-          // If the duplicate had data the "best" folder is missing, keep it.
-          if (item.data && !best.data) {
-            await _upsertJsonFile('data.json', best.folder.id, item.data, null);
-            best.data = item.data;
-          }
-
-          // Move any other children (Images/Videos subfolders, stray files) into "best".
-          const listUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(`'${item.folder.id}' in parents and trashed=false`)}&fields=files(id,name,mimeType)&pageSize=1000`;
-          const lr = await _driveGet(listUrl);
-          const ld = await lr.json();
-          for (const child of (ld.files || [])) {
-            if (child.name === 'data.json') continue; // duplicate copy, dropped with the folder
-            if (child.mimeType === 'application/vnd.google-apps.folder' && (child.name === 'Images' || child.name === 'Videos')) {
-              const targetSub = await _findOrMakeFolder(child.name, best.folder.id);
-              const subListUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(`'${child.id}' in parents and trashed=false`)}&fields=files(id)&pageSize=1000`;
-              const slr = await _driveGet(subListUrl);
-              const sld = await slr.json();
-              for (const f of (sld.files || [])) {
-                await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?addParents=${targetSub}&removeParents=${child.id}`,
-                  { method: 'PATCH', headers: { Authorization: 'Bearer ' + gdriveToken } });
-                movedFiles++;
-              }
-            } else {
-              await fetch(`https://www.googleapis.com/drive/v3/files/${child.id}?addParents=${best.folder.id}&removeParents=${item.folder.id}`,
-                { method: 'PATCH', headers: { Authorization: 'Bearer ' + gdriveToken } });
-              movedFiles++;
-            }
-          }
-
-          // Trash the now-empty duplicate folder.
-          await fetch(`https://www.googleapis.com/drive/v3/files/${item.folder.id}`, {
-            method: 'PATCH',
-            headers: { Authorization: 'Bearer ' + gdriveToken, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ trashed: true }),
-          });
-          mergedCount++;
-        }
-
-        // Clear caches so subsequent reads/writes resolve to the surviving folder.
-        delete _dayFolderCache[name];
-        delete _dayImgFolderCache[name];
-        delete _dayVideoFolderCache[name];
-      }
-    }
-
-    setSyncState('ok');
-    alert(mergedCount > 0
-      ? `Merged ${mergedCount} duplicate folder(s) and moved ${movedFiles} file(s). Pulling fresh data now…`
-      : 'No duplicate day folders found — you\'re all clear.');
-    if (mergedCount > 0) await drivePull(true);
-  } catch (e) {
-    console.error('Duplicate cleanup failed:', e);
-    setSyncState('error');
-    alert('Cleanup failed: ' + e.message);
-  }
 }
 
 /* push one day */
@@ -7946,7 +7151,6 @@ function openSettings() {
         Every change syncs automatically within 1–2 seconds. Your data lives only in Drive.
       </div>
       <button class="s-btn" onclick="drivePull()">⬇ Pull latest from Drive</button>
-      <button class="s-btn" onclick="runDuplicateFolderCleanup()">🧹 Fix duplicate day folders</button>
       <button class="s-btn danger" onclick="driveDisconnect()">Disconnect</button>`}
     </div>
     <div class="s-section">
@@ -7970,10 +7174,20 @@ function openSettings() {
     </div>
     <div class="s-section">
       <div class="s-section-title">Read Topics</div>
-      <div class="fl" style="margin-bottom:8px">Default length</div>
+      <div class="fl" style="margin-bottom:8px">Categories</div>
+      <div class="filter-row" style="margin-bottom:14px">
+        ${getAllReadCategories().map(c=>`<div class="fc ${(DB.profile.readCategories||[]).includes(c.id)?'on':''}" onclick="toggleReadCategory('${c.id}')">${esc(c.en)}</div>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:18px">
+        <input type="text" class="fi" id="read-new-cat" placeholder="Add custom category…" style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();addReadCategory();}" />
+        <button class="s-btn" style="width:auto;padding:0 16px" onclick="addReadCategory()">Add</button>
+      </div>
+      <div class="fl" style="margin-bottom:8px">Depth</div>
       <div class="filter-row" style="margin-bottom:18px">
         ${READ_DEPTHS.map(d=>`<div class="fc ${(DB.profile.readDepth||'standard')===d.id?'on':''}" onclick="setReadDepth('${d.id}')">${d.en} · ${d.sub}</div>`).join('')}
       </div>
+      <button class="s-btn" id="read-gen-btn" onclick="manualGenerateRead(this)">✦ Generate what should I read today</button>
+      <div style="font-size:11px;color:var(--ink4);margin-top:6px">Pulls a fresh topic right now using your categories and depth above.</div>
     </div>`;
   document.getElementById('settings-bg').classList.add('open');
 }
@@ -8145,23 +7359,6 @@ function loadGIS() {
 function genId() { return Math.random().toString(36).slice(2,9)+Date.now().toString(36); }
 function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-// Turns raw article text (paragraphs separated by blank lines, optional "## Heading"
-// lines, and **bold** spans) into clean, readable HTML for the Read view.
-function formatArticleContent(raw) {
-  const text = (raw || '').replace(/\r\n/g, '\n').trim();
-  const blocks = text.split(/\n\s*\n/);
-  return blocks.map(block => {
-    let b = block.trim();
-    if (!b) return '';
-    const headingMatch = b.match(/^#{1,3}\s+(.*)$/);
-    if (headingMatch) {
-      return `<div class="art-h">${esc(headingMatch[1]).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')}</div>`;
-    }
-    const inline = esc(b).replace(/\n/g, '<br>').replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
-    return `<p class="art-p">${inline}</p>`;
-  }).join('');
-}
-
 /* ════════════════════════════════════════════════
    BOOT — read-only until Drive pull succeeds
 ════════════════════════════════════════════════ */
@@ -8280,6 +7477,11 @@ function formatArticleContent(raw) {
 </div>
 
 <div id="ai-toast"></div>
+<div id="ai-bar">
+  <input id="ai-input" type="text" placeholder="Tell SaadOs anything… prayed all salawat in masjid, spent 50 MAD on lunch…" autocomplete="off" autocorrect="off" spellcheck="false" />
+  <button id="ai-chat-toggle" onclick="aiChatToggle()" title="Chat with AI">💬</button>
+  <button id="ai-send-btn" onclick="aiRun()" title="Run">✦</button>
+</div>
 
 <script>
 // Register service worker for PWA installability + offline app shell
@@ -8355,10 +7557,8 @@ function scheduleReminder() {
    → JSON patch → DB merge → markUnsaved()
 ════════════════════════════════════════════════ */
 
-// Key removed from the client on purpose — it now lives ONLY in Vercel's
-// environment variables and is used server-side inside /api/chat.js.
-// The browser calls our own endpoint below instead of Groq directly.
-const GROQ_URL = '/api/chat';
+const GROQ_API_KEY = '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';
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 // Safe top-level keys AI is allowed to touch
 const AI_ALLOWED_KEYS = new Set(['days', 'mal', 'wird', 'practices', 'profile']);
@@ -8540,9 +7740,8 @@ function aiBuildContext() {
 
   // Build last 7 days of prayer + task data
   const last7 = {};
-  const _anchor7 = new Date(today + 'T12:00:00');
   for (let i = 0; i < 7; i++) {
-    const d = new Date(_anchor7);
+    const d = new Date();
     d.setDate(d.getDate() - i);
     const key = d.toISOString().slice(0, 10);
     const dayData = DB.days[key];
@@ -8647,7 +7846,7 @@ CURRENT TIME: ${new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'
 }
 
 // ── Call Groq with fallback models ──
-async function aiCallGroq(systemPrompt, userMessage, maxTokens = 1000) {
+async function aiCallGroq(systemPrompt, userMessage) {
   const models = [
     'llama-3.3-70b-versatile',
     'llama3-70b-8192',
@@ -8661,6 +7860,7 @@ async function aiCallGroq(systemPrompt, userMessage, maxTokens = 1000) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${GROQ_API_KEY}`,
         },
         body: JSON.stringify({
           model,
@@ -8669,7 +7869,7 @@ async function aiCallGroq(systemPrompt, userMessage, maxTokens = 1000) {
             { role: 'user',   content: userMessage  },
           ],
           temperature: 0.1,
-          max_tokens: maxTokens,
+          max_tokens: 1000,
         }),
       });
 
@@ -8821,6 +8021,72 @@ function aiApplyPatch(patch) {
   }
 }
 
+async function aiRun() {
+  const input = document.getElementById('ai-input');
+  const btn   = document.getElementById('ai-send-btn');
+  const text  = input.value.trim();
+  if (!text) { input.focus(); return; }
+
+  if (GROQ_API_KEY === 'YOUR_GROQ_KEY_HERE') {
+    aiToast('⚠ Add your Groq API key to the file first', 'err');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '…';
+  aiToast('Thinking…');
+
+  const context = aiBuildContext();
+  const userMessage = `Current app state:\n${JSON.stringify(context, null, 2)}\n\nUser command: "${text}"`;
+
+  try {
+    const raw = await aiCallGroq(aiBuildSystemPrompt(), userMessage);
+
+    // Strip any accidental markdown fences
+    const clean = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim();
+
+    let patch;
+    try {
+      patch = JSON.parse(clean);
+    } catch (e) {
+      throw new Error('AI returned invalid JSON — try rephrasing');
+    }
+
+    // Check if AI returned an error signal
+    if (patch.error) {
+      throw new Error(patch.error);
+    }
+
+    // Validate before touching anything
+    const validationError = aiValidatePatch(patch);
+    if (validationError) {
+      throw new Error('Validation failed: ' + validationError);
+    }
+
+    // ── SAFE MERGE ──
+    aiApplyPatch(patch);
+
+    // ── Done — persist and re-render ──
+    markUnsaved();
+    renderSection();
+
+    input.value = '';
+    aiToastWithUndo('Done ✓');
+
+  } catch (err) {
+    console.error('AI command error:', err);
+    aiToast('✕ ' + (err.message || 'Something went wrong'), 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✦';
+  }
+}
+
+// Enter key submits
+document.getElementById('ai-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); aiRun(); }
+});
+
 /* ════════════════════════════════════════════════
    AI CHAT WINDOW
 ════════════════════════════════════════════════ */
@@ -8829,16 +8095,16 @@ const aiChatHistory = [];
 
 function aiChatToggle() {
   const win = document.getElementById('ai-chat-window');
-  const cornerBtn = document.getElementById('ai-corner-btn');
+  const heroBtn = document.getElementById('hero-ai-btn');
   const barBtn  = document.getElementById('ai-chat-toggle');
   const isOpen  = win.classList.contains('open');
   if (isOpen) {
     win.classList.remove('open');
-    cornerBtn && cornerBtn.classList.remove('active');
+    heroBtn && heroBtn.classList.remove('active');
     barBtn  && barBtn.classList.remove('active');
   } else {
     win.classList.add('open');
-    cornerBtn && cornerBtn.classList.add('active');
+    heroBtn && heroBtn.classList.add('active');
     barBtn  && barBtn.classList.add('active');
     document.getElementById('ai-chat-input').focus();
     aiChatScrollBottom();
@@ -8847,13 +8113,11 @@ function aiChatToggle() {
 
 function aiChatClose() {
   document.getElementById('ai-chat-window').classList.remove('open');
-  const cornerBtn = document.getElementById('ai-corner-btn');
+  const heroBtn = document.getElementById('hero-ai-btn');
   const barBtn  = document.getElementById('ai-chat-toggle');
-  cornerBtn && cornerBtn.classList.remove('active');
+  heroBtn && heroBtn.classList.remove('active');
   barBtn  && barBtn.classList.remove('active');
 }
-
-
 
 function aiChatScrollBottom() {
   const msgs = document.getElementById('ai-chat-messages');
@@ -8903,6 +8167,11 @@ async function aiChatSend() {
   const btn   = document.getElementById('ai-chat-send');
   const text  = input.value.trim();
   if (!text) return;
+
+  if (GROQ_API_KEY === 'YOUR_GROQ_KEY_HERE') {
+    aiChatAddMsg('ai', '⚠ Add your Groq API key to the file first.', 'error');
+    return;
+  }
 
   // Add user message to UI and history
   aiChatAddMsg('user', text);
@@ -8956,6 +8225,7 @@ NEVER invent a wird or practice id — only use ids already present in context.w
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
       },
       body: JSON.stringify({
         model: 'llama-3.3-70b-versatile',
