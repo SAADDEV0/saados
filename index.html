@@ -17,7 +17,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600&family=Outfit:wght@300;400;500;600&family=Noto+Naskh+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600&family=Outfit:wght@300;400;500;600&family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Amiri+Quran&family=Lateef:wght@400;700&family=Harmattan:wght@400;700&display=swap" rel="stylesheet">
 <style>
 /* ──────────────────────────────────────────────
    TOKENS
@@ -1444,30 +1444,41 @@ textarea.fi { resize: vertical; min-height: 80px; }
 }
 .qr-pace-btn:hover { border-color: var(--gold); color: var(--gold); }
 .qr-pace-btn.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
-.qr-page-head {
-  display: flex; justify-content: space-between; align-items: baseline;
-  margin-bottom: 4px;
+.qr-font-row { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+.qr-page-divider {
+  display: flex; align-items: center; gap: 10px;
+  margin: 26px 0 16px;
+  font-family: var(--sans); font-size: 11px; font-weight: 500;
+  letter-spacing: 0.5px; text-transform: uppercase; color: var(--ink4);
 }
-.qr-surah-label { font-family: var(--serif); font-size: 13px; font-style: italic; color: var(--ink3); margin: 18px 0 8px; }
-.qr-surah-label:first-child { margin-top: 0; }
+.qr-page-divider:first-child { margin-top: 0; }
+.qr-page-divider::before, .qr-page-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.qr-surah-label { font-family: var(--serif); font-size: 14px; font-style: italic; color: var(--ink3); margin: 4px 0 14px; text-align: center; }
 .qr-arabic-page {
-  font-family: var(--quran-font);
   direction: rtl;
   text-align: right;
-  font-size: 22px;
-  line-height: 2.15;
   color: var(--text);
-  margin-bottom: 22px;
+  margin-bottom: 10px;
 }
-.qr-ayah { cursor: pointer; border-radius: 4px; padding: 1px 2px; transition: background 0.15s; }
+.qr-ayah {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 14px 6px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.qr-ayah:last-child { border-bottom: none; }
 .qr-ayah:hover { background: var(--gold-glow); }
-.qr-ayah.starred { background: var(--gold-glow); color: var(--gold2); }
+.qr-ayah.starred { background: var(--gold-glow); }
+.qr-ayah.starred .qr-ayah-text { color: var(--gold2); }
+.qr-ayah-text { flex: 1; font-size: 22px; line-height: 2; }
 .qr-ayah-num {
+  flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center;
   font-family: var(--sans); font-size: 11px; font-weight: 500;
-  width: 20px; height: 20px; border-radius: 50%;
+  width: 22px; height: 22px; border-radius: 50%;
   border: 1px solid var(--border2); color: var(--ink3);
-  margin: 0 4px; vertical-align: middle;
+  margin-top: 4px;
 }
 .qr-hint { font-size: 12px; color: var(--ink4); margin-bottom: 18px; text-align: center; }
 .qr-loading { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 60px 0; color: var(--ink4); font-size: 13px; }
@@ -4876,14 +4887,32 @@ function appendToSijjil(ds, block) {
 const QURAN_TOTAL_PAGES = 604;
 const QURAN_EDITION = 'quran-simple';
 const QURAN_PACE_PRESETS = [2, 4, 6];
+const QURAN_FONTS = [
+  { id: 'naskh',     label: 'Naskh',       family: "'Noto Naskh Arabic', serif" },
+  { id: 'amiri',     label: 'Amiri Quran', family: "'Amiri Quran', serif" },
+  { id: 'lateef',    label: 'Lateef',      family: "'Lateef', serif" },
+  { id: 'harmattan', label: 'Harmattan',   family: "'Harmattan', sans-serif" },
+];
 let quranShowDoneForm = false;
 let _quranLoading = false;
+
+function quranFontFamily() {
+  const f = QURAN_FONTS.find(f => f.id === (DB.profile.quranFontId || 'naskh'));
+  return (f || QURAN_FONTS[0]).family;
+}
+
+function setQuranFont(id) {
+  DB.profile.quranFontId = id;
+  markUnsaved();
+  renderSection();
+}
 
 function ensureQuranDefaults() {
   if (DB.profile.quranPagesPerDay == null) DB.profile.quranPagesPerDay = 2;
   if (DB.profile.quranNextPage == null) DB.profile.quranNextPage = 1;
   if (DB.profile.quranKhatmCount == null) DB.profile.quranKhatmCount = 0;
   if (DB.profile.quranTotalPagesRead == null) DB.profile.quranTotalPagesRead = 0;
+  if (DB.profile.quranFontId == null) DB.profile.quranFontId = 'naskh';
 }
 
 function renderReadQuran(el) {
@@ -4912,6 +4941,11 @@ function renderReadQuran(el) {
     <span class="qr-pace-label">Pages per day:</span>
     ${QURAN_PACE_PRESETS.map(p => `<button class="qr-pace-btn ${pagesPerDay === p ? 'on' : ''}" onclick="setQuranPace(${p})">${p}</button>`).join('')}
     <button class="qr-pace-btn ${!QURAN_PACE_PRESETS.includes(pagesPerDay) ? 'on' : ''}" onclick="openQuranCustomPaceModal()">${!QURAN_PACE_PRESETS.includes(pagesPerDay) ? pagesPerDay + ' (custom)' : 'Custom…'}</button>
+  </div>`;
+
+  h += `<div class="qr-font-row">
+    <span class="qr-pace-label">Font:</span>
+    ${QURAN_FONTS.map(f => `<button class="qr-pace-btn ${(DB.profile.quranFontId || 'naskh') === f.id ? 'on' : ''}" style="font-family:${f.family}" onclick="setQuranFont('${f.id}')">${esc(f.label)}</button>`).join('')}
   </div>`;
 
   el.innerHTML = h;
@@ -5014,23 +5048,34 @@ async function loadQuranPages() {
   }
 }
 
-function renderQuranReadingView(el, topic) {
-  let h = `<div class="qr-hint">Tap a verse to mark it as today's key verse ⭐</div>`;
-
+// Shared renderer for the running Arabic text — used both while reading and
+// in the post-Done view (since "+ Read another page" can extend either one).
+// Each page gets its own labeled divider (with an id for scroll-to-position),
+// and each ayah is its own clearly separated block rather than a run-on line.
+function renderQuranPagesHTML(topic) {
   let lastSurah = null;
-  h += `<div class="qr-arabic-page">`;
+  let h = `<div class="qr-arabic-page" style="font-family:${quranFontFamily()}">`;
   topic.pages.forEach(page => {
+    h += `<div class="qr-page-divider" id="qr-page-${page.pageNumber}">Page ${page.pageNumber}</div>`;
     page.ayahs.forEach(a => {
       if (a.surahNum !== lastSurah) {
         h += `<div class="qr-surah-label">﴾ ${esc(a.surahName || '')} — ${esc(a.surahNameAr || '')} ﴿</div>`;
         lastSurah = a.surahNum;
       }
       const isStarred = topic.starredAyah && topic.starredAyah.surahNum === a.surahNum && topic.starredAyah.numberInSurah === a.numberInSurah;
-      h += `<span class="qr-ayah ${isStarred ? 'starred' : ''}" onclick="starQuranAyah(${a.surahNum},${a.numberInSurah})">${esc(a.text)}<span class="qr-ayah-num">${a.numberInSurah}</span></span> `;
+      h += `<div class="qr-ayah ${isStarred ? 'starred' : ''}" onclick="starQuranAyah(${a.surahNum},${a.numberInSurah})">
+        <span class="qr-ayah-num">${a.numberInSurah}</span>
+        <span class="qr-ayah-text">${esc(a.text)}</span>
+      </div>`;
     });
   });
   h += `</div>`;
+  return h;
+}
 
+function renderQuranReadingView(el, topic) {
+  let h = `<div class="qr-hint">Tap a verse to mark it as today's key verse ⭐</div>`;
+  h += renderQuranPagesHTML(topic);
   h += `<div style="font-size:13px;color:var(--ink3);margin-bottom:18px">Pages ${topic.startPage}${topic.endPage !== topic.startPage ? '–' + topic.endPage : ''}</div>`;
 
   if (quranShowDoneForm) {
@@ -5069,14 +5114,8 @@ function starQuranAyah(surahNum, numberInSurah) {
 
 function renderQuranDoneState(el, topic) {
   let h = `<div class="drive-status-pill"><div class="ds-dot g"></div>Done for today — pages ${topic.startPage}${topic.endPage !== topic.startPage ? '–' + topic.endPage : ''}</div>`;
+  h += `<div style="margin-top:20px">` + renderQuranPagesHTML(topic) + `</div>`;
 
-  if (topic.starredAyah) {
-    h += `<div style="margin-top:20px">
-      <div style="font-size:13px;color:var(--text3);letter-spacing:0.3px;text-transform:uppercase;margin-bottom:8px">Today's verse</div>
-      <div class="qr-arabic-page" style="margin-bottom:8px">${esc(topic.starredAyah.text)}</div>
-      <div style="font-size:13px;color:var(--ink4)">${esc(topic.starredAyah.surahName || '')} ${topic.starredAyah.surahNum}:${topic.starredAyah.numberInSurah}</div>
-    </div>`;
-  }
   if (topic.reaction) {
     h += `<div style="margin-top:14px;font-size:14px;color:var(--text2);font-style:italic">"${esc(topic.reaction)}"</div>`;
   }
@@ -5164,6 +5203,12 @@ async function extendQuranReading() {
   } finally {
     _quranLoading = false;
     renderSection();
+    // Jump straight to the new page's divider instead of leaving the user to
+    // scroll and hunt for where the previous page ended.
+    requestAnimationFrame(() => {
+      const marker = document.getElementById(`qr-page-${newPageNum}`);
+      if (marker) marker.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   }
 }
 
