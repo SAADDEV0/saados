@@ -5003,7 +5003,7 @@ async function loadQuranPages() {
 
     const pages = await Promise.all(pageNums.map(fetchQuranPage));
 
-    day.quranTopic = { startPage, endPage, pages, done: false, starredAyah: null, reaction: null };
+    day.quranTopic = { startPage, endPage, pages, done: false, starredAyah: null, reaction: null, _userStarred: false, _sijjilBlock: null };
     markUnsaved();
   } catch (e) {
     console.error('Quran fetch failed:', e);
@@ -5041,7 +5041,10 @@ function renderQuranReadingView(el, topic) {
         <button class="submit-btn" style="margin:0" onclick="submitQuranDone(false)">Save</button>
       </div>`;
   } else {
-    h += `<button class="submit-btn" onclick="quranShowDoneForm=true;renderSection()">✓ Done Reading</button>`;
+    h += `<div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="submit-btn" style="margin:0" onclick="quranShowDoneForm=true;renderSection()">✓ Done Reading</button>
+      ${topic.endPage < QURAN_TOTAL_PAGES ? `<button class="s-btn" style="width:auto;padding:0 16px" ${_quranLoading ? 'disabled' : ''} onclick="extendQuranReading()">${_quranLoading ? 'Loading…' : '+ Read another page'}</button>` : ''}
+    </div>`;
   }
 
   el.innerHTML = h;
@@ -5060,6 +5063,7 @@ function starQuranAyah(surahNum, numberInSurah) {
   }
   if (!ayah) return;
   day.quranTopic.starredAyah = { surahNum, numberInSurah, surahName: ayah.surahName, surahNameAr: ayah.surahNameAr, text: ayah.text };
+  day.quranTopic._userStarred = true;
   renderSection();
 }
 
@@ -5076,7 +5080,91 @@ function renderQuranDoneState(el, topic) {
   if (topic.reaction) {
     h += `<div style="margin-top:14px;font-size:14px;color:var(--text2);font-style:italic">"${esc(topic.reaction)}"</div>`;
   }
+  if (topic.endPage < QURAN_TOTAL_PAGES) {
+    h += `<button class="s-btn" style="width:auto;padding:0 16px;margin-top:20px" ${_quranLoading ? 'disabled' : ''} onclick="extendQuranReading()">${_quranLoading ? 'Loading…' : '+ Read another page'}</button>`;
+  }
   el.innerHTML = h;
+}
+
+// Builds the Sijjil text block for a Quran reading — shared by the initial
+// Done press and by any later extension of the same day's reading.
+function buildQuranSijjilBlock(topic, justFinishedKhatm) {
+  let block = `📗 Quran: read pages ${topic.startPage}${topic.endPage !== topic.startPage ? '–' + topic.endPage : ''}`;
+  if (topic.starredAyah) block += `\n⭐ ${topic.starredAyah.surahName} ${topic.starredAyah.surahNum}:${topic.starredAyah.numberInSurah} — ${topic.starredAyah.text}`;
+  if (topic.reaction) block += `\n${topic.reaction}`;
+  if (justFinishedKhatm) block += `\n🎉 Khatm completed! (#${DB.profile.quranKhatmCount})`;
+  return block;
+}
+
+// Updates an already-logged Sijjil entry in place (used when extending a day
+// that was already marked Done). Replaces the exact previous block if it's
+// still there untouched; otherwise appends an update rather than duplicating.
+function updateQuranSijjilBlock(ds, topic, justFinishedKhatm) {
+  const day = getDay(ds);
+  if (!day.journal) day.journal = { text: '', tags: [], images: [], videos: [] };
+  const newBlock = buildQuranSijjilBlock(topic, justFinishedKhatm);
+  const oldBlock = topic._sijjilBlock;
+  if (oldBlock && day.journal.text && day.journal.text.includes(oldBlock)) {
+    day.journal.text = day.journal.text.replace(oldBlock, newBlock);
+  } else {
+    const existing = (day.journal.text || '').trim();
+    day.journal.text = existing ? existing + '\n\n' + newBlock : newBlock;
+  }
+  topic._sijjilBlock = newBlock;
+}
+
+// Loads exactly one more page onto today's reading. If today was already
+// marked Done, this also advances the page pointer and Khatm count for that
+// extra page, and rewrites today's Sijjil entry in place to reflect it.
+async function extendQuranReading() {
+  if (_quranLoading) return;
+  const ds = todayStr();
+  const day = getDay(ds);
+  const topic = day.quranTopic;
+  if (!topic || !topic.pages) return;
+  if (topic.endPage >= QURAN_TOTAL_PAGES) return;
+
+  const wasDone = topic.done;
+  const newPageNum = wasDone ? DB.profile.quranNextPage : topic.endPage + 1;
+
+  _quranLoading = true;
+  renderSection();
+
+  try {
+    const page = await fetchQuranPage(newPageNum);
+    topic.pages.push(page);
+    topic.endPage = newPageNum;
+
+    if (!topic._userStarred) {
+      const lastAyah = page.ayahs[page.ayahs.length - 1];
+      if (lastAyah) topic.starredAyah = { surahNum: lastAyah.surahNum, numberInSurah: lastAyah.numberInSurah, surahName: lastAyah.surahName, text: lastAyah.text };
+    }
+
+    if (wasDone) {
+      ensureQuranDefaults();
+      DB.profile.quranTotalPagesRead += 1;
+      let justFinishedKhatm = false;
+      if (newPageNum >= QURAN_TOTAL_PAGES) {
+        DB.profile.quranKhatmCount += 1;
+        DB.profile.quranNextPage = 1;
+        justFinishedKhatm = true;
+      } else {
+        DB.profile.quranNextPage = newPageNum + 1;
+      }
+      updateQuranSijjilBlock(ds, topic, justFinishedKhatm);
+    }
+    // If today wasn't marked Done yet, nothing else to do here — the pointer
+    // and Sijjil entry get written once, at the eventual Done press, and
+    // they'll naturally reflect the now-extended page range.
+
+    markUnsaved();
+  } catch (e) {
+    console.error('Extend Quran reading failed:', e);
+    aiToast('✕ Could not load the next page — check your connection', 'err');
+  } finally {
+    _quranLoading = false;
+    renderSection();
+  }
 }
 
 function getQuranStreak() {
@@ -5128,11 +5216,9 @@ function submitQuranDone(skip) {
   }
 
   // Auto-log to Sijjil: pages read + the key verse + optional reflection.
-  let block = `📗 Quran: read pages ${topic.startPage}${topic.endPage !== topic.startPage ? '–' + topic.endPage : ''}`;
-  if (verse) block += `\n⭐ ${verse.surahName} ${verse.surahNum}:${verse.numberInSurah} — ${verse.text}`;
-  if (reaction) block += `\n${reaction}`;
-  if (justFinishedKhatm) block += `\n🎉 Khatm completed! (#${DB.profile.quranKhatmCount})`;
+  const block = buildQuranSijjilBlock(topic, justFinishedKhatm);
   appendToSijjil(ds, block);
+  topic._sijjilBlock = block;
 
   markUnsaved();
   renderSection();
