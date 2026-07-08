@@ -3493,6 +3493,22 @@ window.addEventListener('beforeunload', (e) => {
 let _journalDebounce = null;
 let _unsyncedChanges = false;
 
+// ── Local snapshot cache ────────────────────────────────────────────
+// Drive remains the source of truth, but we also keep an instant local
+// copy so that if the browser reloads this tab on its own (e.g. Chrome/
+// Edge "memory saver" discarding an inactive tab), the app can restore
+// immediately from disk instead of showing a spinner and re-pulling
+// from the network — which is what made every browser-tab-switch look
+// like the app had "refreshed" and reset itself.
+function _cacheDBLocally(synced) {
+  try {
+    localStorage.setItem('raqib_db_cache', JSON.stringify({ db: DB, savedAt: Date.now(), synced: !!synced }));
+  } catch(e) {
+    // Storage full/unavailable — non-fatal, Drive push is still the real save.
+    console.warn('Local cache write failed:', e);
+  }
+}
+
 function _showUnsyncedWarning(show) {
   _unsyncedChanges = show;
   let bar = document.getElementById('ai-unsync-bar');
@@ -3518,6 +3534,7 @@ function _showUnsyncedWarning(show) {
 }
 
 function markUnsaved(isJournalText = false) {
+  _cacheDBLocally(false); // instant local snapshot, before any network round-trip
   if (!driveReady) return;
   if (!DB.gdrive.connected) { setSyncState('offline'); return; }
   markDayDirty(currentDate);
@@ -3566,6 +3583,7 @@ async function _runPush() {
     await drivePush();
     setSyncState('ok');
     _showUnsyncedWarning(false);
+    _cacheDBLocally(true); // confirmed saved to Drive
   } catch(e) {
     console.error('Sync failed:', e.message);
     setSyncState('error');
@@ -3911,9 +3929,9 @@ function shiftDay(n) {
   const d = new Date(currentDate+'T12:00:00');
   d.setDate(d.getDate()+n);
   currentDate = d.toISOString().split('T')[0];
-  renderHero(); renderSection();
+  renderHero(); renderSection(true);
 }
-function goToday() { currentDate=todayStr(); renderHero(); renderSection(); }
+function goToday() { currentDate=todayStr(); renderHero(); renderSection(true); }
 function getDay(s) {
   if(!DB.days[s]) DB.days[s]={ niyyah:'', tasks:[], prayers:{}, practicesDone:{}, wirdCounts:{}, focusTime:{}, totalFocusSec:0, journal:{text:'',tags:[],images:[],videos:[]}, nawafil:[], readTopic:null, quranTopic:null };
   const d = DB.days[s];
@@ -4000,7 +4018,7 @@ function applyTheme(t) { document.documentElement.setAttribute('data-theme',t); 
 ════════════════════════════════════════════════ */
 function init() {
   applyTheme(DB.profile.theme||'light');
-  renderNav(); renderHero(); renderSection(); updateSyncUI();
+  renderNav(); renderHero(); renderSection(true); updateSyncUI();
   document.getElementById('fab').style.display = 'flex';
   if (DB.profile?.notifEnabled && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
     scheduleReminder();
@@ -4019,7 +4037,7 @@ function renderNav() {
     </div>`).join('');
 }
 function navigate(id) {
-  currentSection=id; renderNav(); renderSection();
+  currentSection=id; renderNav(); renderSection(true);
   const fab = document.getElementById('fab');
   if(id==='mal') {
     fab.style.display = 'flex';
@@ -4046,11 +4064,23 @@ function renderHero() {
 /* ════════════════════════════════════════════════
    SECTION ROUTER
 ════════════════════════════════════════════════ */
-function renderSection() {
+// renderSection(hard):
+//  - hard=true  → real navigation (switching sections, changing date, first load):
+//                 scroll to top and replay the entrance animation, since the
+//                 content is genuinely new.
+//  - hard=false (default) → in-place refresh after a data change on the SAME
+//                 section/date (e.g. marking a prayer, toggling a task):
+//                 keep the user's scroll position and skip the animation replay,
+//                 so it doesn't look like the page "refreshed".
+function renderSection(hard) {
   const el = document.getElementById('section-content');
-  el.innerHTML=''; el.scrollTop=0;
-  // restart animation
-  el.style.animation='none'; el.offsetHeight; el.style.animation='';
+  const keptScroll = el.scrollTop;
+  el.innerHTML='';
+  if(hard) {
+    el.scrollTop = 0;
+    // restart animation
+    el.style.animation='none'; el.offsetHeight; el.style.animation='';
+  }
   switch(currentSection) {
     case 'niyyah':    renderNiyyah(el); break;
     case 'salat':     renderSalat(el);  break;
@@ -4060,6 +4090,7 @@ function renderSection() {
     case 'mizan':     renderMizan(el);  break;
     case 'mal':       renderMal(el);    break;
   }
+  if(!hard) el.scrollTop = keptScroll;
 }
 
 /* ════════════════════════════════════════════════
@@ -4379,39 +4410,44 @@ function _fmt12(hm) {
   return `${h}:${String(m).padStart(2,'0')} ${ampm}`;
 }
 
-function renderSalat(el) {
-  const day=getDay(currentDate);
-  if(!day.prayers) day.prayers={};
-  if(!day.nawafil) day.nawafil=[];
+function _weekStripHTML() {
+  const today2=new Date(todayStr()+'T12:00:00');
+  let h=`<div class="week-strip" id="week-strip" style="margin-top:20px">`;
+  for(let i=6;i>=0;i--){
+    const d=new Date(today2); d.setDate(d.getDate()-i);
+    const ds=d.toISOString().split('T')[0];
+    const dayD=getDayRO(ds);
+    let cnt=0;
+    if(dayD?.prayers) PRAYERS.forEach(p=>{
+      const pr=dayD.prayers[p.id]||{};
+      if(pr.location==='mosque'||(pr.location==='home'&&pr.timing==='on_time')) cnt++;
+    });
+    const lbl=d.toLocaleDateString('en-US',{weekday:'short'});
+    const total = PRAYERS.length + ((dayD?.nawafil||[]).length);
+    const cls=cnt===PRAYERS.length?'full':cnt>0?'partial':'';
+    h+=`<div class="wday"><div class="wday-label">${lbl}</div><div class="wday-bubble ${cls}">${cnt}</div></div>`;
+  }
+  h+=`</div>`;
+  return h;
+}
+function refreshWeekStrip() {
+  const old = document.getElementById('week-strip');
+  if(!old) return; // not currently on the salat section — nothing to update
+  const wrap = document.createElement('div');
+  wrap.innerHTML = _weekStripHTML();
+  old.replaceWith(wrap.firstElementChild);
+}
 
-  // Clear any old countdown timer
-  if(_prayerTimerInterval){ clearInterval(_prayerTimerInterval); _prayerTimerInterval=null; }
+function _prayerItemHTML(p, pr) {
+  const location = pr.location || 'not_yet'; // 'mosque','home','not_yet'
+  const timing   = pr.timing   || 'not_yet'; // 'on_time','late' — only when location=home
+  const notes    = pr.notes    || '';
 
-  let h=`<div class="s-head">
-    <div class="s-kicker">Prayer · El Jadida</div>
-    <div class="s-title">Salat <span class="s-title-ar">صلاة</span></div>
-    <div class="s-sub">The five pillars of your day</div>
-  </div>
-  <div id="salat-next-banner-wrap"></div>
-  <div class="prayer-stack">
-  <div class="prayer-line"></div>`;
+  const dot = location==='mosque'?'🕌':location==='home'?(timing==='on_time'?'✓':timing==='late'?'↓':'🏠'):'·';
+  const badgeText = location==='mosque'?'Mosque':location==='home'?(timing==='on_time'?'Home · On time':timing==='late'?'Home · Late':'Home'):'Not yet';
+  const badgeCls  = location==='mosque'?'on_time':location==='home'&&timing==='on_time'?'on_time':location==='home'&&timing==='late'?'late':'not_yet';
 
-  PRAYERS.forEach(p=>{
-    const pr = day.prayers[p.id] || {};
-    const location = pr.location || 'not_yet'; // 'mosque','home','not_yet'
-    const timing   = pr.timing   || 'not_yet'; // 'on_time','late' — only when location=home
-    const notes    = pr.notes    || '';
-
-    // Determine display status
-    let displayStatus = 'not_yet';
-    if(location==='mosque') displayStatus = 'mosque';
-    else if(location==='home') displayStatus = timing==='on_time'?'on_time':timing==='late'?'late':'home';
-
-    const dot = location==='mosque'?'🕌':location==='home'?(timing==='on_time'?'✓':timing==='late'?'↓':'🏠'):'·';
-    const badgeText = location==='mosque'?'Mosque':location==='home'?(timing==='on_time'?'Home · On time':timing==='late'?'Home · Late':'Home'):'Not yet';
-    const badgeCls  = location==='mosque'?'on_time':location==='home'&&timing==='on_time'?'on_time':location==='home'&&timing==='late'?'late':'not_yet';
-
-    h+=`<div class="prayer-item">
+  return `<div class="prayer-item" id="pi-${p.id}">
       <div class="prayer-dot-wrap"><div class="prayer-dot ${location!=='not_yet'?(location==='mosque'?'on_time':timing||''):''}">
         <span style="font-size:11px">${dot}</span>
       </div></div>
@@ -4445,27 +4481,14 @@ function renderSalat(el) {
         </div>
       </div>
     </div>`;
-  });
+}
 
-  // Nawafil section
-  const nawafil = day.nawafil || [];
-  h+=`</div>
-  <div style="margin-top:20px">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <div style="font-size:10px;letter-spacing:2.5px;text-transform:uppercase;color:var(--gold);font-weight:500">Nawafil — نوافل</div>
-      <button onclick="openAddNafl()" style="background:none;border:1.5px solid var(--border);border-radius:20px;padding:5px 14px;font-size:12px;color:var(--ink3);cursor:pointer;font-family:var(--sans);transition:all 0.2s" onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--ink3)'">+ Add Nafl</button>
-    </div>`;
-
-  if(!nawafil.length) {
-    h+=`<div class="empty-state" style="padding:16px 0;font-size:13px">No nawafil recorded — tap + Add Nafl</div>`;
-  } else {
-    h+=`<div class="prayer-stack"><div class="prayer-line"></div>`;
-    nawafil.forEach((nf,i)=>{
-      const loc = nf.location||'home';
-      const tim = nf.timing||'on_time';
-      const badgeTxt = loc==='mosque'?'Mosque':(tim==='on_time'?'Home · On time':'Home · Late');
-      const badgeCl  = loc==='mosque'?'on_time':tim==='on_time'?'on_time':'late';
-      h+=`<div class="prayer-item">
+function _naflItemHTML(nf, i) {
+  const loc = nf.location||'home';
+  const tim = nf.timing||'on_time';
+  const badgeTxt = loc==='mosque'?'Mosque':(tim==='on_time'?'Home · On time':'Home · Late');
+  const badgeCl  = loc==='mosque'?'on_time':tim==='on_time'?'on_time':'late';
+  return `<div class="prayer-item" id="ni-${i}">
         <div class="prayer-dot-wrap"><div class="prayer-dot ${loc==='mosque'?'on_time':tim}">
           <span style="font-size:10px">${loc==='mosque'?'🕌':'✓'}</span>
         </div></div>
@@ -4488,29 +4511,89 @@ function renderSalat(el) {
           </div>
         </div>
       </div>`;
-    });
+}
+function updateNaflCard(i) {
+  const oldItem = document.getElementById('ni-'+i);
+  if(!oldItem) { renderSection(); return; }
+  const d = getDay(currentDate);
+  const nf = d.nawafil?.[i];
+  if(!nf) { renderSection(); return; }
+  const wasOpen = document.getElementById('nf-'+i)?.classList.contains('open');
+  const wrap = document.createElement('div');
+  wrap.innerHTML = _naflItemHTML(nf, i);
+  oldItem.replaceWith(wrap.firstElementChild);
+  if(wasOpen) document.getElementById('nf-'+i)?.classList.add('open');
+}
+
+// Patch just ONE prayer's card in place instead of tearing down and
+// rebuilding the entire Salat section. Preserves the open/closed accordion
+// state and the already-fetched prayer-time badge (which we don't want to
+// blank out and re-fetch on every tap).
+function updatePrayerCard(id) {
+  const oldItem = document.getElementById('pi-'+id);
+  if(!oldItem) { renderSection(); return; } // safety net if DOM isn't in the expected shape
+  const p = PRAYERS.find(x=>x.id===id);
+  if(!p) { renderSection(); return; }
+  const day = getDay(currentDate);
+
+  const wasOpen = document.getElementById('pc-'+id)?.classList.contains('open');
+  const oldBadge = document.getElementById('ptb-'+id);
+  const oldBadgeHTML = oldBadge?.innerHTML;
+  const oldBadgeClass = oldBadge?.className;
+
+  const wrap = document.createElement('div');
+  wrap.innerHTML = _prayerItemHTML(p, day.prayers[id] || {});
+  const newItem = wrap.firstElementChild;
+  oldItem.replaceWith(newItem);
+
+  if(wasOpen) document.getElementById('pc-'+id)?.classList.add('open');
+  const newBadge = document.getElementById('ptb-'+id);
+  if(newBadge && oldBadgeHTML !== undefined) { newBadge.innerHTML = oldBadgeHTML; newBadge.className = oldBadgeClass; }
+
+  refreshWeekStrip();
+}
+
+function renderSalat(el) {
+  const day=getDay(currentDate);
+  if(!day.prayers) day.prayers={};
+  if(!day.nawafil) day.nawafil=[];
+
+  // Clear any old countdown timer
+  if(_prayerTimerInterval){ clearInterval(_prayerTimerInterval); _prayerTimerInterval=null; }
+
+  let h=`<div class="s-head">
+    <div class="s-kicker">Prayer · El Jadida</div>
+    <div class="s-title">Salat <span class="s-title-ar">صلاة</span></div>
+    <div class="s-sub">The five pillars of your day</div>
+  </div>
+  <div id="salat-next-banner-wrap"></div>
+  <div class="prayer-stack">
+  <div class="prayer-line"></div>`;
+
+  PRAYERS.forEach(p=>{
+    h += _prayerItemHTML(p, day.prayers[p.id] || {});
+  });
+
+  // Nawafil section
+  const nawafil = day.nawafil || [];
+  h+=`</div>
+  <div style="margin-top:20px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div style="font-size:10px;letter-spacing:2.5px;text-transform:uppercase;color:var(--gold);font-weight:500">Nawafil — نوافل</div>
+      <button onclick="openAddNafl()" style="background:none;border:1.5px solid var(--border);border-radius:20px;padding:5px 14px;font-size:12px;color:var(--ink3);cursor:pointer;font-family:var(--sans);transition:all 0.2s" onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--ink3)'">+ Add Nafl</button>
+    </div>`;
+
+  if(!nawafil.length) {
+    h+=`<div class="empty-state" style="padding:16px 0;font-size:13px">No nawafil recorded — tap + Add Nafl</div>`;
+  } else {
+    h+=`<div class="prayer-stack"><div class="prayer-line"></div>`;
+    nawafil.forEach((nf,i)=>{ h += _naflItemHTML(nf, i); });
     h+=`</div>`;
   }
   h+=`</div>`;
 
   // Week strip — count mosque as on_time, home+on_time as on_time, home+late as late
-  const today2=new Date(todayStr()+'T12:00:00');
-  h+=`<div class="week-strip" style="margin-top:20px">`;
-  for(let i=6;i>=0;i--){
-    const d=new Date(today2); d.setDate(d.getDate()-i);
-    const ds=d.toISOString().split('T')[0];
-    const dayD=getDayRO(ds);
-    let cnt=0;
-    if(dayD?.prayers) PRAYERS.forEach(p=>{
-      const pr=dayD.prayers[p.id]||{};
-      if(pr.location==='mosque'||(pr.location==='home'&&pr.timing==='on_time')) cnt++;
-    });
-    const lbl=d.toLocaleDateString('en-US',{weekday:'short'});
-    const total = PRAYERS.length + ((dayD?.nawafil||[]).length);
-    const cls=cnt===PRAYERS.length?'full':cnt>0?'partial':'';
-    h+=`<div class="wday"><div class="wday-label">${lbl}</div><div class="wday-bubble ${cls}">${cnt}</div></div>`;
-  }
-  h+=`</div>`;
+  h+=_weekStripHTML();
 
   el.innerHTML=h;
 
@@ -4579,18 +4662,18 @@ function setPrayerLocation(id, loc) {
   if(!d.prayers[id]) d.prayers[id]={};
   d.prayers[id].location=loc;
   if(loc==='mosque') d.prayers[id].timing='on_time';
-  markUnsaved(); renderSection();
+  markUnsaved(); updatePrayerCard(id);
 }
 function setPrayerTiming(id, tim) {
   const d=getDay(currentDate); if(!d.prayers) d.prayers={};
   if(!d.prayers[id]) d.prayers[id]={};
   d.prayers[id].timing=tim;
-  markUnsaved(); renderSection();
+  markUnsaved(); updatePrayerCard(id);
 }
 function resetPrayer(id) {
   const d=getDay(currentDate); if(!d.prayers) d.prayers={};
   d.prayers[id]={location:'not_yet',timing:'not_yet',notes:''};
-  markUnsaved(); renderSection();
+  markUnsaved(); updatePrayerCard(id);
 }
 function savePrayerNotes(id,v) { const d=getDay(currentDate); if(!d.prayers) d.prayers={}; if(!d.prayers[id]) d.prayers[id]={}; d.prayers[id].notes=v; markUnsaved(); }
 
@@ -4642,11 +4725,11 @@ function submitNafl() {
 function setNaflLocation(i, loc) {
   const d=getDay(currentDate); if(!d.nawafil?.[i]) return;
   d.nawafil[i].location=loc; if(loc==='mosque') d.nawafil[i].timing='on_time';
-  markUnsaved(); renderSection();
+  markUnsaved(); updateNaflCard(i);
 }
 function setNaflTiming(i, tim) {
   const d=getDay(currentDate); if(!d.nawafil?.[i]) return;
-  d.nawafil[i].timing=tim; markUnsaved(); renderSection();
+  d.nawafil[i].timing=tim; markUnsaved(); updateNaflCard(i);
 }
 function deleteNafl(i) {
   const d=getDay(currentDate); if(!d.nawafil) return;
@@ -6910,6 +6993,7 @@ async function drivePull(silent=false) {
     }
 
     if(!DB.wird?.length) DB.wird = JSON.parse(JSON.stringify(DEFAULT_WIRD));
+    _cacheDBLocally(true); // mirror confirmed Drive state locally
     if(!silent) { closeSettings(); init(); setSyncState('ok'); }
     return true;
   } catch(e) {
@@ -8215,15 +8299,33 @@ function formatArticleContent(raw) {
   const wasLoggedIn = localStorage.getItem('raqib_logged_in') === '1';
 
   if(wasLoggedIn) {
+    // Try an instant local restore first. This is what stops a browser-
+    // triggered tab reload (e.g. Chrome/Edge discarding an inactive tab to
+    // save memory) from looking like the app wiped itself: instead of
+    // showing a spinner and waiting on the network, we show your last known
+    // state immediately, then reconcile with Drive quietly in the background.
+    let cache = null;
+    try {
+      const raw = localStorage.getItem('raqib_db_cache');
+      if(raw) cache = JSON.parse(raw);
+    } catch(e) { cache = null; }
+
     document.getElementById('onboarding').style.display = 'none';
     document.getElementById('app').classList.add('visible');
-    document.getElementById('fab').style.display = 'none';
-    document.getElementById('section-content').innerHTML =
-      `<div id="boot-msg" style="text-align:center;padding:80px 20px;color:var(--text3);font-family:var(--serif);font-style:italic;font-size:18px">
-        <div style="margin-bottom:20px">Connecting to Drive…</div>
-        <div style="width:40px;height:40px;margin:0 auto;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:boot-spin 0.8s linear infinite"></div>
-      </div>
-      <style>@keyframes boot-spin{to{transform:rotate(360deg)}}</style>`;
+
+    if(cache && cache.db) {
+      DB = cache.db;
+      DB.gdrive.clientId = HARDCODED_CID; // always trust the hardcoded id, never a stale cached one
+      init();
+    } else {
+      document.getElementById('fab').style.display = 'none';
+      document.getElementById('section-content').innerHTML =
+        `<div id="boot-msg" style="text-align:center;padding:80px 20px;color:var(--text3);font-family:var(--serif);font-style:italic;font-size:18px">
+          <div style="margin-bottom:20px">Connecting to Drive…</div>
+          <div style="width:40px;height:40px;margin:0 auto;border:2px solid var(--border);border-top-color:var(--gold);border-radius:50%;animation:boot-spin 0.8s linear infinite"></div>
+        </div>
+        <style>@keyframes boot-spin{to{transform:rotate(360deg)}}</style>`;
+    }
 
     // Reuse the cached access token directly if it hasn't expired yet — no Google round-trip needed
     const cachedToken = localStorage.getItem('raqib_token');
@@ -8238,21 +8340,34 @@ function formatArticleContent(raw) {
     }
 
     if(gdriveToken) {
-      const bm = document.getElementById('boot-msg');
-      if(bm) bm.querySelector('div').textContent = 'Loading your data…';
-      // Try migration from old flat file first
-      const migrated = await migrateOldData();
-      if(!migrated) {
-        const loaded = await drivePull(true);
-        if(!loaded) { DB.onboarded = true; }
-      }
       driveReady = true;
-      init(); setSyncState('ok');
+
+      if(cache && cache.db && cache.synced === false) {
+        // The last change made before this reload was never confirmed as
+        // saved to Drive (e.g. the tab was closed/discarded mid-save).
+        // Push what we have rather than pulling — pulling here would
+        // silently throw away that change in favor of Drive's older copy.
+        await _doPush();
+        setSyncState('ok');
+      } else {
+        const beforeSnapshot = cache ? JSON.stringify(DB) : null;
+        // Try migration from old flat file first
+        const migrated = await migrateOldData();
+        if(!migrated) {
+          const loaded = await drivePull(true);
+          if(!loaded && !cache) { DB.onboarded = true; }
+        }
+        // Only re-render if Drive actually had something different from what
+        // we already showed via the local cache — avoids an unnecessary
+        // visible re-render when nothing has actually changed.
+        if(!cache || JSON.stringify(DB) !== beforeSnapshot) { init(); }
+        setSyncState('ok');
+      }
       return;
     }
 
     // Silent refresh failed (e.g. Google session expired) — show centered login screen again
-    document.getElementById('app').classList.remove('visible');
+    if(!cache) document.getElementById('app').classList.remove('visible');
     document.getElementById('onboarding').style.display = '';
     document.getElementById('ob-drive-status').textContent = 'Session expired — please log in again.';
     return;
