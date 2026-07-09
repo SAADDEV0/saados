@@ -17,7 +17,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600&family=Outfit:wght@300;400;500;600&family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Amiri+Quran&family=Lateef:wght@400;700&family=Harmattan:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600&family=Outfit:wght@300;400;500;600&family=Noto+Naskh+Arabic:wght@400;500;600;700&family=Amiri+Quran&family=Amiri:ital,wght@0,400;0,700;1,400&family=Lateef:wght@400;700&family=Harmattan:wght@400;700&family=Scheherazade+New:wght@400;500;600;700&family=Aref+Ruqaa:wght@400;700&family=Markazi+Text:wght@400;500;600;700&family=Reem+Kufi:wght@400;500;600;700&family=Noto+Kufi+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 /* ──────────────────────────────────────────────
    TOKENS
@@ -2192,6 +2192,73 @@ textarea.fi { resize: vertical; min-height: 80px; }
 }
 
 
+/* ── Albums (Memories) — playlist-style folders for filtering images ── */
+.alb-row {
+  display: flex; gap: 14px; overflow-x: auto;
+  padding: 2px 2px 12px 2px; margin-bottom: 14px;
+  scrollbar-width: thin;
+}
+.alb-pill {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  width: 64px; cursor: pointer;
+}
+.alb-pill-thumb {
+  width: 56px; height: 56px; border-radius: 50%;
+  background: var(--surface2);
+  border: 2px solid var(--border);
+  overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; opacity: 0.55;
+  transition: all 0.2s var(--ease);
+}
+.alb-pill-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.alb-pill.active .alb-pill-thumb { border-color: var(--gold); opacity: 1; box-shadow: 0 0 0 2px var(--surface), 0 0 0 3px var(--gold); }
+.alb-pill-label {
+  font-family: var(--sans); font-size: 11px; font-weight: 500;
+  color: var(--ink3); max-width: 68px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.alb-pill.active .alb-pill-label { color: var(--gold); font-weight: 600; }
+.alb-pill-new .alb-pill-thumb { border-style: dashed; font-size: 22px; opacity: 0.7; }
+.alb-manage-btn {
+  position: absolute; top: -2px; right: 2px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--ink); color: var(--paper); border: 2px solid var(--surface);
+  font-size: 10px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; padding: 0;
+}
+.alb-manage-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+}
+.alb-manage-item { position: relative; }
+.alb-manage-thumb {
+  width: 100%; aspect-ratio: 1; border-radius: var(--radius-sm);
+  background: var(--surface2); overflow: hidden;
+  display: flex; align-items: center; justify-content: center; font-size: 18px; opacity: 0.5;
+}
+.alb-manage-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.alb-manage-actions {
+  display: flex; justify-content: space-between; gap: 4px; margin-top: 3px;
+}
+.alb-manage-actions button {
+  flex: 1; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 6px; font-size: 11px; padding: 3px 0; cursor: pointer; color: var(--ink3);
+}
+.alb-manage-actions button.on { color: var(--gold); border-color: var(--gold); }
+
+/* Gallery multi-select mode */
+.gal-check {
+  position: absolute; top: 6px; right: 6px; z-index: 2;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: rgba(10,9,8,0.35); border: 1.5px solid rgba(255,255,255,0.85);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: #fff;
+}
+.gal-item.sel { outline: 3px solid var(--gold); outline-offset: -3px; }
+.gal-item.sel .gal-check { background: var(--gold); border-color: var(--gold); }
+
 /* image lightbox */
 #j-lightbox {
   display: none;
@@ -3437,6 +3504,7 @@ let DB = {
   onboarded: false,
   mal: { budget: 0, expenses: [] },
   readQueue: [],
+  albums: [], // memory albums (playlists of images): {id, name, driveIds:[], thumbDriveId}
 };
 let currentSection = 'niyyah';
 let mizanPeriod = 'today'; // 'today' | '7d' | '30d' | '365d'
@@ -4971,10 +5039,16 @@ const QURAN_TOTAL_PAGES = 604;
 const QURAN_EDITION = 'quran-simple';
 const QURAN_PACE_PRESETS = [2, 4, 6];
 const QURAN_FONTS = [
-  { id: 'naskh',     label: 'Naskh',       family: "'Noto Naskh Arabic', serif" },
-  { id: 'amiri',     label: 'Amiri Quran', family: "'Amiri Quran', serif" },
-  { id: 'lateef',    label: 'Lateef',      family: "'Lateef', serif" },
-  { id: 'harmattan', label: 'Harmattan',   family: "'Harmattan', sans-serif" },
+  { id: 'naskh',       label: 'Naskh',        family: "'Noto Naskh Arabic', serif" },
+  { id: 'amiri',       label: 'Amiri Quran',  family: "'Amiri Quran', serif" },
+  { id: 'amiri-reg',   label: 'Amiri',        family: "'Amiri', serif" },
+  { id: 'scheherazade',label: 'Scheherazade', family: "'Scheherazade New', serif" },
+  { id: 'lateef',      label: 'Lateef',       family: "'Lateef', serif" },
+  { id: 'harmattan',   label: 'Harmattan',    family: "'Harmattan', sans-serif" },
+  { id: 'aref',        label: 'Aref Ruqaa',   family: "'Aref Ruqaa', serif" },
+  { id: 'markazi',     label: 'Markazi Text', family: "'Markazi Text', serif" },
+  { id: 'reemkufi',    label: 'Reem Kufi',    family: "'Reem Kufi', sans-serif" },
+  { id: 'notokufi',    label: 'Noto Kufi',    family: "'Noto Kufi Arabic', sans-serif" },
 ];
 let quranShowDoneForm = false;
 let _quranLoading = false;
@@ -5974,6 +6048,11 @@ function renderTimeMachine(el) {
     return;
   }
 
+  // Albums row — playlists/folders of images, browsable from Memories too
+  const albWrap = document.createElement('div');
+  albWrap.innerHTML = renderAlbumsRow();
+  wrap.appendChild(albWrap.firstElementChild);
+
   // Load Media button — appears at top of memories view
   const loadMediaBtn = document.createElement('button');
   loadMediaBtn.id = 'load-media-btn';
@@ -6035,6 +6114,7 @@ function renderTimeMachine(el) {
   });
 
   el.appendChild(wrap);
+  loadAlbumThumbs();
 }
 
 async function loadAllMedia(allDates) {
@@ -6077,6 +6157,9 @@ const _galleryFetchPromises = {};
 
 let galleryView = 'masonry'; // 'masonry' | 'pinterest'
 let galleryTypeFilter = 'all'; // 'all' | 'images' | 'videos'
+let galleryAlbumFilter = null; // album id, or null = all
+let gallerySelectMode = false;
+let gallerySelected = new Set(); // driveIds currently selected
 
 // Build the flat list of all media items across all days (newest first)
 function collectGalleryItems() {
@@ -6125,12 +6208,6 @@ function renderGallery(el) {
   // collect all media items from all days, newest first
   const allItems = collectGalleryItems();
 
-  // filter by type, but keep original index (i) for cache/placeholder lookups
-  const indexed = allItems.map((it,i)=>({it,i}));
-  const items = galleryTypeFilter === 'images' ? indexed.filter(x=>x.it.type==='image')
-    : galleryTypeFilter === 'videos' ? indexed.filter(x=>x.it.type==='video')
-    : indexed;
-
   let h = `<div class="gal-count-sub">${allItems.length} item${allItems.length===1?'':'s'} from all your entries</div>`;
 
   if(!allItems.length) {
@@ -6143,6 +6220,9 @@ function renderGallery(el) {
     return;
   }
 
+  // Albums row — playlists/folders for filtering images
+  h += renderAlbumsRow();
+
   // View switcher
   const views = [
     { id:'masonry',   label:'◫ Soft Masonry' },
@@ -6152,8 +6232,17 @@ function renderGallery(el) {
     ${views.map(v=>`<button class="gal-view-btn ${galleryView===v.id?'active':''}" onclick="setGalleryView('${v.id}')">${v.label}</button>`).join('')}
   </div>`;
 
-  // Type filter
-  const typeCount = { all: allItems.length, images: allItems.filter(x=>x.type==='image').length, videos: allItems.filter(x=>x.type==='video').length };
+  // filter by album, then by type, but keep original index (i) for cache/placeholder lookups
+  const activeAlbum = galleryAlbumFilter ? getAlbum(galleryAlbumFilter) : null;
+  const albumIds = activeAlbum ? new Set(activeAlbum.driveIds || []) : null;
+  const indexed = allItems.map((it,i)=>({it,i})).filter(x => !albumIds || albumIds.has(x.it.driveId));
+  const items = galleryTypeFilter === 'images' ? indexed.filter(x=>x.it.type==='image')
+    : galleryTypeFilter === 'videos' ? indexed.filter(x=>x.it.type==='video')
+    : indexed;
+
+  // Type filter (counts respect the active album)
+  const scoped = albumIds ? allItems.filter(x=>albumIds.has(x.driveId)) : allItems;
+  const typeCount = { all: scoped.length, images: scoped.filter(x=>x.type==='image').length, videos: scoped.filter(x=>x.type==='video').length };
   const filters = [
     { id:'all',    label:`All ${typeCount.all}` },
     { id:'images', label:`🖼 Images ${typeCount.images}` },
@@ -6163,19 +6252,25 @@ function renderGallery(el) {
     ${filters.map(f=>`<button class="gal-view-btn ${galleryTypeFilter===f.id?'active':''}" onclick="setGalleryTypeFilter('${f.id}')">${f.label}</button>`).join('')}
   </div>`;
 
-  h += `<button id="gal-load-btn" class="gal-load-btn ${galleryLoaded?'loaded':''}" ${galleryLoading?'disabled':''} onclick="loadGalleryMedia()">${galleryLoaded ? '✓ Loaded' : (galleryLoading ? 'Loading…' : '🖼 Load images')}</button>`;
+  h += `<div class="gal-view-row">
+    <button id="gal-load-btn" class="gal-load-btn ${galleryLoaded?'loaded':''}" style="margin:0" ${galleryLoading?'disabled':''} onclick="loadGalleryMedia()">${galleryLoaded ? '✓ Loaded' : (galleryLoading ? 'Loading…' : '🖼 Load images')}</button>
+    <button class="gal-view-btn ${gallerySelectMode?'active':''}" onclick="toggleGallerySelectMode()">${gallerySelectMode ? '✕ Cancel' : '☑ Select'}</button>
+    ${gallerySelectMode ? `<button class="gal-view-btn" ${gallerySelected.size?'':'disabled'} onclick="openAddToAlbumModal()">+ Add to album (${gallerySelected.size})</button>` : ''}
+  </div>`;
 
   if(!items.length) {
     h += `<div class="tm-empty">
       <div class="tm-empty-icon">${galleryTypeFilter==='videos'?'🎬':'🖼'}</div>
-      <div class="tm-empty-text">No ${galleryTypeFilter} yet.</div>
+      <div class="tm-empty-text">No ${galleryTypeFilter==='all'?'items':galleryTypeFilter} ${activeAlbum ? `in "${esc(activeAlbum.name)}"` : 'yet'}.</div>
     </div>`;
   } else if(galleryView === 'pinterest') {
     h += `<div class="gal-pinterest" id="gal-grid">`;
     items.forEach(({it,i}) => {
-      h += `<div class="gal-item gal-pin-item" data-i="${i}" onclick="openJLightbox('${esc(it.driveId||'')}','${it.type}')">
+      const sel = gallerySelected.has(it.driveId);
+      h += `<div class="gal-item gal-pin-item ${sel?'sel':''}" data-i="${i}" data-drive-id="${esc(it.driveId||'')}" onclick="galleryItemClick('${esc(it.driveId||'')}','${it.type}')">
         <div class="gal-item-ph" id="gal-ph-${i}">${it.type==='video' ? '🎬' : '🖼'}</div>
         ${it.type==='video' ? '<div class="gal-play">▶</div>' : ''}
+        ${gallerySelectMode ? `<div class="gal-check">${sel?'✓':''}</div>` : ''}
       </div>`;
     });
     h += `</div>`;
@@ -6184,9 +6279,11 @@ function renderGallery(el) {
     h += `<div class="gal-masonry" id="gal-grid">`;
     items.forEach(({it,i}, idx) => {
       const span = [1,2,1,1,2,1,1,1][idx % 8]; // varied heights via row-span
-      h += `<div class="gal-item gal-masonry-item span-${span}" data-i="${i}" onclick="openJLightbox('${esc(it.driveId||'')}','${it.type}')">
+      const sel = gallerySelected.has(it.driveId);
+      h += `<div class="gal-item gal-masonry-item span-${span} ${sel?'sel':''}" data-i="${i}" data-drive-id="${esc(it.driveId||'')}" onclick="galleryItemClick('${esc(it.driveId||'')}','${it.type}')">
         <div class="gal-item-ph" id="gal-ph-${i}">${it.type==='video' ? '🎬' : '🖼'}</div>
         ${it.type==='video' ? '<div class="gal-play">▶</div>' : ''}
+        ${gallerySelectMode ? `<div class="gal-check">${sel?'✓':''}</div>` : ''}
       </div>`;
     });
     h += `</div>`;
@@ -6198,6 +6295,7 @@ function renderGallery(el) {
   // Fill any items already cached, and resume loading if needed/in-progress
   if(gdriveToken && (galleryLoaded || galleryLoading)) loadGalleryMedia(true);
   else applyGalleryCache();
+  loadAlbumThumbs();
 }
 
 function setGalleryView(v) {
@@ -6208,6 +6306,201 @@ function setGalleryView(v) {
 function setGalleryTypeFilter(f) {
   galleryTypeFilter = f;
   renderSection();
+}
+
+/* ── Albums (Memories) — folders/playlists of images for filtering ── */
+function getAlbum(id) { return (DB.albums||[]).find(a=>a.id===id); }
+
+// Switching the album filter also jumps into the Gallery, so this can be
+// called from the Memories (Time Machine) tab's album row too.
+function setGalleryAlbumFilter(id) {
+  sijjilMode = 'gallery';
+  galleryAlbumFilter = id;
+  gallerySelectMode = false;
+  gallerySelected.clear();
+  renderSection();
+}
+
+function renderAlbumsRow() {
+  const albums = DB.albums || [];
+  let h = `<div class="alb-row" id="alb-row">`;
+  h += `<div class="alb-pill ${!galleryAlbumFilter?'active':''}" onclick="setGalleryAlbumFilter(null)">
+    <div class="alb-pill-thumb">🖼</div>
+    <div class="alb-pill-label">All</div>
+  </div>`;
+  albums.forEach(a => {
+    h += `<div class="alb-pill ${galleryAlbumFilter===a.id?'active':''}">
+      <div class="alb-pill-thumb" id="alb-thumb-${a.id}" onclick="setGalleryAlbumFilter('${a.id}')">📁</div>
+      <div class="alb-pill-label" onclick="setGalleryAlbumFilter('${a.id}')">${esc(a.name)}</div>
+      ${galleryAlbumFilter===a.id ? `<button class="alb-manage-btn" onclick="event.stopPropagation();openManageAlbum('${a.id}')" title="Manage album">⚙</button>` : ''}
+    </div>`;
+  });
+  h += `<div class="alb-pill alb-pill-new" onclick="openCreateAlbumModal()" title="New album">
+    <div class="alb-pill-thumb">+</div>
+    <div class="alb-pill-label">New</div>
+  </div>`;
+  h += `</div>`;
+  return h;
+}
+
+function loadAlbumThumbs() {
+  (DB.albums||[]).forEach(a => {
+    const driveId = a.thumbDriveId || (a.driveIds||[])[0];
+    if(!driveId) return;
+    const elm = document.getElementById(`alb-thumb-${a.id}`);
+    if(!elm) return;
+    if(_galleryUrlCache[driveId]) { elm.innerHTML = `<img src="${_galleryUrlCache[driveId]}" alt="">`; return; }
+    if(!gdriveToken) return;
+    getDriveMediaUrl(driveId).then(url => {
+      if(!url) return;
+      _galleryUrlCache[driveId] = url;
+      const elm2 = document.getElementById(`alb-thumb-${a.id}`);
+      if(elm2) elm2.innerHTML = `<img src="${url}" alt="">`;
+    }).catch(()=>{});
+  });
+}
+
+function openCreateAlbumModal() {
+  document.getElementById('modal-content').innerHTML = `
+    <div class="modal-title">New album</div>
+    <div class="fg"><label class="fl">Name</label>
+      <input type="text" class="fi" id="alb-name" placeholder="e.g. Ramadan, Family, Sunsets…"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();submitCreateAlbum();}" /></div>
+    <div class="modal-footer">
+      <button class="mf-btn" onclick="closeModal()">Cancel</button>
+      <button class="mf-btn pri" onclick="submitCreateAlbum()">Create</button>
+    </div>`;
+  document.getElementById('modal-bg').classList.add('open');
+  setTimeout(()=>document.getElementById('alb-name')?.focus(), 50);
+}
+
+function submitCreateAlbum() {
+  const name = document.getElementById('alb-name')?.value.trim();
+  if(!name) return;
+  const album = { id: genId(), name, driveIds: [], thumbDriveId: null };
+  DB.albums = DB.albums || [];
+  DB.albums.push(album);
+  markUnsaved(); closeModal();
+  galleryAlbumFilter = album.id;
+  renderSection();
+}
+
+function openManageAlbum(id) {
+  const a = getAlbum(id); if(!a) return;
+  const items = (a.driveIds||[]).map(driveId => _galleryItems.find(x=>x.driveId===driveId) || {driveId, type:'image'});
+  const grid = items.map(it => `
+    <div class="alb-manage-item">
+      <div class="alb-manage-thumb" id="alb-mng-${it.driveId}">${it.type==='video'?'🎬':'🖼'}</div>
+      <div class="alb-manage-actions">
+        <button class="${a.thumbDriveId===it.driveId?'on':''}" title="Set as thumbnail" onclick="setAlbumThumb('${a.id}','${it.driveId}')">★</button>
+        <button title="Remove from album" onclick="removeFromAlbum('${a.id}','${it.driveId}')">✕</button>
+      </div>
+    </div>`).join('');
+  document.getElementById('modal-content').innerHTML = `
+    <div class="modal-title">Manage album</div>
+    <div class="fg"><label class="fl">Name</label><input type="text" class="fi" id="alb-rename" value="${esc(a.name)}" /></div>
+    <div class="fg"><label class="fl">Thumbnail — tap ★ to choose</label>
+      <div style="max-height:240px;overflow-y:auto">
+      ${items.length ? `<div class="alb-manage-grid">${grid}</div>` : `<div style="font-size:13px;color:var(--ink3);padding:8px 0">No images yet. In the Gallery, tap "Select", pick images, then "Add to album".</div>`}
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="mf-btn" style="color:#b33a3a" onclick="deleteAlbum('${a.id}')">Delete album</button>
+      <button class="mf-btn pri" onclick="saveAlbumRename('${a.id}')">Save</button>
+    </div>`;
+  document.getElementById('modal-bg').classList.add('open');
+  items.forEach(it => {
+    if(!it.driveId) return;
+    const apply = url => { const t = document.getElementById(`alb-mng-${it.driveId}`); if(t) t.innerHTML = it.type==='video' ? `<div style="font-size:20px">🎬</div>` : `<img src="${url}" alt="">`; };
+    if(_galleryUrlCache[it.driveId]) { apply(_galleryUrlCache[it.driveId]); return; }
+    if(!gdriveToken || it.type==='video') return;
+    getDriveMediaUrl(it.driveId).then(url => { if(url){ _galleryUrlCache[it.driveId]=url; apply(url); } }).catch(()=>{});
+  });
+}
+
+function saveAlbumRename(id) {
+  const a = getAlbum(id); if(!a) return;
+  const name = document.getElementById('alb-rename')?.value.trim();
+  if(name) a.name = name;
+  markUnsaved(); closeModal(); renderSection();
+}
+
+function setAlbumThumb(albumId, driveId) {
+  const a = getAlbum(albumId); if(!a) return;
+  a.thumbDriveId = driveId;
+  markUnsaved();
+  openManageAlbum(albumId);
+}
+
+function removeFromAlbum(albumId, driveId) {
+  const a = getAlbum(albumId); if(!a) return;
+  a.driveIds = (a.driveIds||[]).filter(x=>x!==driveId);
+  if(a.thumbDriveId === driveId) a.thumbDriveId = a.driveIds[0] || null;
+  markUnsaved();
+  openManageAlbum(albumId);
+}
+
+function deleteAlbum(id) {
+  if(!confirm('Delete this album? The photos themselves stay in your journal — only the album/grouping is removed.')) return;
+  DB.albums = (DB.albums||[]).filter(a=>a.id!==id);
+  if(galleryAlbumFilter===id) galleryAlbumFilter = null;
+  markUnsaved(); closeModal(); renderSection();
+}
+
+function toggleGallerySelectMode() {
+  gallerySelectMode = !gallerySelectMode;
+  gallerySelected.clear();
+  renderSection();
+}
+
+function galleryItemClick(driveId, type) {
+  if(gallerySelectMode) {
+    if(!driveId) return;
+    if(gallerySelected.has(driveId)) gallerySelected.delete(driveId); else gallerySelected.add(driveId);
+    renderSection();
+  } else {
+    openJLightbox(driveId, type);
+  }
+}
+
+function openAddToAlbumModal() {
+  if(!gallerySelected.size) return;
+  const albums = DB.albums || [];
+  const list = albums.map(a=>`<button class="mf-btn" style="width:100%;text-align:left;margin-bottom:6px;display:block" onclick="addSelectedToAlbum('${a.id}')">📁 ${esc(a.name)} <span style="color:var(--ink4);font-size:12px">(${(a.driveIds||[]).length})</span></button>`).join('');
+  document.getElementById('modal-content').innerHTML = `
+    <div class="modal-title">Add ${gallerySelected.size} item${gallerySelected.size===1?'':'s'} to album</div>
+    <div class="fg" style="max-height:220px;overflow-y:auto">${list || `<div style="font-size:13px;color:var(--ink3)">No albums yet — create one below.</div>`}</div>
+    <div class="fg"><label class="fl">Or create new album</label>
+      <input type="text" class="fi" id="alb-name-new" placeholder="Album name…"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();createAlbumAndAddSelected();}" /></div>
+    <div class="modal-footer">
+      <button class="mf-btn" onclick="closeModal()">Cancel</button>
+      <button class="mf-btn pri" onclick="createAlbumAndAddSelected()">Create &amp; add</button>
+    </div>`;
+  document.getElementById('modal-bg').classList.add('open');
+}
+
+function addSelectedToAlbum(albumId) {
+  const a = getAlbum(albumId); if(!a) return;
+  a.driveIds = a.driveIds || [];
+  gallerySelected.forEach(id => { if(!a.driveIds.includes(id)) a.driveIds.push(id); });
+  if(!a.thumbDriveId) {
+    const firstImg = [...gallerySelected].map(id=>_galleryItems.find(x=>x.driveId===id)).find(x=>x && x.type==='image');
+    if(firstImg) a.thumbDriveId = firstImg.driveId;
+  }
+  markUnsaved(); closeModal();
+  gallerySelectMode = false; gallerySelected.clear();
+  aiToast(`Added to "${a.name}"`, 'ok');
+  renderSection();
+}
+
+function createAlbumAndAddSelected() {
+  const name = document.getElementById('alb-name-new')?.value.trim();
+  if(!name) return;
+  const a = { id: genId(), name, driveIds: [], thumbDriveId: null };
+  DB.albums = DB.albums || [];
+  DB.albums.push(a);
+  addSelectedToAlbum(a.id);
 }
 
 
@@ -6872,6 +7165,7 @@ async function pushProfile() {
     profile:DB.profile, practices:DB.practices, wird:DB.wird,
     onboarded:DB.onboarded, gdrive:{ lastSync:DB.gdrive.lastSync },
     mal: DB.mal ? { budget: DB.mal.budget || 0, expenses: DB.mal.expenses || [] } : { budget: 0, expenses: [] },
+    albums: DB.albums || [],
   }, existingId);
 }
 
@@ -6976,6 +7270,7 @@ async function drivePull(silent=false) {
           DB.mal = { budget: p.mal.budget||0, expenses: p.mal.expenses||[] };
         }
       }
+      DB.albums = Array.isArray(p.albums) ? p.albums : (DB.albums || []);
     }
 
     // ── 4. Apply day data ─────────────────────────────────────────────────
