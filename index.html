@@ -3601,11 +3601,11 @@ function _showUnsyncedWarning(show) {
   }
 }
 
-function markUnsaved(isJournalText = false) {
+function markUnsaved(isJournalText = false, forDate = null) {
   _cacheDBLocally(false); // instant local snapshot, before any network round-trip
   if (!driveReady) return;
   if (!DB.gdrive.connected) { setSyncState('offline'); return; }
-  markDayDirty(currentDate);
+  markDayDirty(forDate || currentDate);
 
   if (isJournalText) {
     // Debounce journal text — wait 2s after user stops typing
@@ -5077,7 +5077,6 @@ function renderReadQuran(el) {
   const ds = todayStr();
   const day = getDay(ds);
   const topic = day.quranTopic;
-  const streak = getQuranStreak();
   const pagesPerDay = DB.profile.quranPagesPerDay;
   const nextPage = DB.profile.quranNextPage;
   const khatmCount = DB.profile.quranKhatmCount;
@@ -5089,10 +5088,6 @@ function renderReadQuran(el) {
     <div class="qr-stat"><div class="qr-stat-num">${pctComplete}%</div><div class="qr-stat-label">Completed</div></div>
     <div class="qr-stat"><div class="qr-stat-num">${khatmCount}</div><div class="qr-stat-label">Khatm${khatmCount === 1 ? '' : 's'}</div></div>
   </div>`;
-
-  if (streak > 0) {
-    h += `<div class="prac-streak" style="font-size:13px;margin-bottom:18px">🔥 ${streak}-day Quran streak</div>`;
-  }
 
   h += `<div class="qr-pace-row">
     <span class="qr-pace-label">Pages per day:</span>
@@ -5195,7 +5190,7 @@ async function loadQuranPages() {
     const pages = await Promise.all(pageNums.map(fetchQuranPage));
 
     day.quranTopic = { startPage, endPage, pages, done: false, starredAyah: null, reaction: null, _userStarred: false, _sijjilBlock: null };
-    markUnsaved();
+    markUnsaved(false, ds);
   } catch (e) {
     console.error('Quran fetch failed:', e);
     aiToast('✕ Could not load Quran pages — check your connection', 'err');
@@ -5353,7 +5348,7 @@ async function extendQuranReading() {
     // and Sijjil entry get written once, at the eventual Done press, and
     // they'll naturally reflect the now-extended page range.
 
-    markUnsaved();
+    markUnsaved(false, ds);
   } catch (e) {
     console.error('Extend Quran reading failed:', e);
     aiToast('✕ Could not load the next page — check your connection', 'err');
@@ -5367,17 +5362,6 @@ async function extendQuranReading() {
       if (marker) marker.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   }
-}
-
-function getQuranStreak() {
-  let s = 0; const t = new Date(currentDate + 'T12:00:00');
-  for (let i = 0; i < 365; i++) {
-    const d = new Date(t); d.setDate(d.getDate() - i);
-    const ds = d.toISOString().split('T')[0];
-    const dd = getDayRO(ds);
-    if (dd?.quranTopic?.done) s++; else if (i > 0) break;
-  }
-  return s;
 }
 
 function submitQuranDone(skip) {
@@ -5422,7 +5406,7 @@ function submitQuranDone(skip) {
   appendToSijjil(ds, block);
   topic._sijjilBlock = block;
 
-  markUnsaved();
+  markUnsaved(false, ds);
   renderSection();
 }
 
