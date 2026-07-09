@@ -5963,6 +5963,9 @@ function renderSijjilWrite(el, dateLabel) {
           <button class="sj-add-btn sj-camera-btn" onclick="sjOpenCamera(event)">
             📸 Camera
           </button>
+          <button class="sj-add-btn" id="sj-sync-btn" onclick="sjSyncMediaFromDrive()" title="Pick up files added directly in Drive's Images/Videos folder for this day">
+            🔄 Sync from Drive
+          </button>
         </div>
       </div>
       <div class="sj-gallery-body" id="sj-gallery-body">
@@ -6789,6 +6792,59 @@ async function sjUploadVideo(file) {
   } catch(e) {
     alert('Video upload failed: ' + e.message);
     uploadMsg?.remove();
+  }
+}
+
+// Lists non-folder files directly inside a Drive folder (id, name, mimeType).
+async function _listFilesInFolder(parentId) {
+  const q = `'${parentId}' in parents and trashed=false and mimeType!='application/vnd.google-apps.folder'`;
+  const r = await _driveGet(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType)&pageSize=400`);
+  return r.ok ? (await r.json()).files||[] : [];
+}
+
+// Picks up any files that were added straight into this day's Drive
+// Images/Videos folders (outside the app) and adds them to the journal entry,
+// so they show up in Sijjil/Gallery without having to re-upload them here.
+async function sjSyncMediaFromDrive() {
+  if(!gdriveToken) { alert('Connect to Google Drive first.'); return; }
+  const btn = document.getElementById('sj-sync-btn');
+  if(btn) { btn.disabled = true; btn.textContent = '🔄 Syncing…'; }
+  try {
+    const d = getDay(sijjilDate);
+    if(!d.journal) d.journal = { text:'', tags:[], images:[], videos:[] };
+    if(!d.journal.images) d.journal.images = [];
+    if(!d.journal.videos) d.journal.videos = [];
+
+    const knownIds = new Set([...d.journal.images, ...d.journal.videos].map(x=>x.driveId));
+
+    const imgFolderId = await getOrCreateDayImgFolder(sijjilDate);
+    const vidFolderId = await getOrCreateDayVideoFolder(sijjilDate);
+    const [imgFiles, vidFiles] = await Promise.all([_listFilesInFolder(imgFolderId), _listFilesInFolder(vidFolderId)]);
+
+    let added = 0;
+    imgFiles.forEach(f => {
+      if(knownIds.has(f.id) || !(f.mimeType||'').startsWith('image/')) return;
+      d.journal.images.push({ driveId: f.id, name: f.name, addedAt: new Date().toISOString() });
+      added++;
+    });
+    vidFiles.forEach(f => {
+      if(knownIds.has(f.id) || !(f.mimeType||'').startsWith('video/')) return;
+      d.journal.videos.push({ driveId: f.id, name: f.name, addedAt: new Date().toISOString(), type: f.mimeType });
+      added++;
+    });
+
+    if(added > 0) {
+      markUnsaved(false, sijjilDate);
+      aiToast(`✓ Found ${added} new item${added===1?'':'s'} from Drive`, 'ok');
+    } else {
+      aiToast('No new files found in Drive for this day');
+    }
+    renderSection();
+  } catch(e) {
+    aiToast('✕ Sync failed — check your connection', 'err');
+  } finally {
+    const btn2 = document.getElementById('sj-sync-btn');
+    if(btn2) { btn2.disabled = false; btn2.textContent = '🔄 Sync from Drive'; }
   }
 }
 
