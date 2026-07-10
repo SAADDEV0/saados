@@ -8858,10 +8858,16 @@ function formatArticleContent(raw) {
       return;
     }
 
-    // Silent refresh failed (e.g. Google session expired) — show centered login screen again
-    if(!cache) document.getElementById('app').classList.remove('visible');
+    // Silent refresh failed (e.g. Google session expired) — show centered login screen again.
+    // Always hide the app here, even if a local cache was shown optimistically above:
+    // without a valid gdriveToken the user is NOT actually connected, and leaving the
+    // app visible would make it look connected when it isn't.
+    DB.gdrive.connected = false;
+    driveReady = false;
+    document.getElementById('app').classList.remove('visible');
     document.getElementById('onboarding').style.display = '';
     document.getElementById('ob-drive-status').textContent = 'Session expired — please log in again.';
+    setSyncState('offline');
     return;
   }
 
