@@ -3983,6 +3983,18 @@ function _casablancaMinutesNow() {
   }
 }
 function getTimezone() { return DB.profile.timezone || 'Africa/Casablanca'; }
+// Formats any timestamp/date as Casablanca wall-clock time — used anywhere
+// we show "last synced at" style times, so it never shows the device's own
+// (possibly wrong) local time.
+function formatCasaTime(input) {
+  try {
+    return new Date(input).toLocaleTimeString('en-GB', {
+      timeZone: 'Africa/Casablanca', hour: '2-digit', minute: '2-digit', hour12: false
+    });
+  } catch(e) {
+    return new Date(input).toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', hour12:false });
+  }
+}
 function getCurrentTimeStr() {
   try {
     return new Date().toLocaleTimeString('en-GB', {
@@ -8367,7 +8379,7 @@ function saveMalBudget() {
 function openSettings() {
   const t=DB.profile.theme||'light';
   const syn=DB.gdrive.connected;
-  const last=DB.gdrive.lastSync?new Date(DB.gdrive.lastSync).toLocaleTimeString():'—';
+  const last=DB.gdrive.lastSync?formatCasaTime(DB.gdrive.lastSync):'—';
   const notifState = (typeof Notification==='undefined') ? 'blocked'
     : Notification.permission==='granted' && DB.profile.notifEnabled ? 'on'
     : Notification.permission==='denied' ? 'blocked' : 'off';
@@ -8393,8 +8405,7 @@ function openSettings() {
     <div class="s-section">
       <div class="s-section-title">Data</div>
       <button class="s-btn" onclick="exportData()">⬇ Download Data</button>
-      <button class="s-btn" onclick="importData()">⬆ Import JSON</button>
-      <input type="file" id="s-import" accept=".json" style="display:none" onchange="doImport(event)" />
+      <button class="s-btn" onclick="exportJsonOnly()">⬇ Download JSON</button>
     </div>
     <div class="s-section">
       <div class="s-section-title">Google Drive</div>
@@ -8409,7 +8420,6 @@ function openSettings() {
       <div style="font-size:12px;color:var(--ink3);margin-bottom:10px;line-height:1.6">
         Every change syncs automatically within 1–2 seconds. Your data lives only in Drive.
       </div>
-      <button class="s-btn" onclick="drivePull()">⬇ Pull latest from Drive</button>
       <button class="s-btn" onclick="runDuplicateFolderCleanup()">🧹 Fix duplicate day folders</button>
       <button class="s-btn danger" onclick="driveDisconnect()">Disconnect</button>`}
     </div>
@@ -8431,13 +8441,6 @@ function openSettings() {
         </select>
       </div>
       <button class="s-btn danger" onclick="disableReminders()">Turn off reminders</button>`}
-    </div>
-    <div class="s-section">
-      <div class="s-section-title">Read Topics</div>
-      <div class="fl" style="margin-bottom:8px">Default length</div>
-      <div class="filter-row" style="margin-bottom:18px">
-        ${READ_DEPTHS.map(d=>`<div class="fc ${(DB.profile.readDepth||'standard')===d.id?'on':''}" onclick="setReadDepth('${d.id}')">${d.en} · ${d.sub}</div>`).join('')}
-      </div>
     </div>`;
   document.getElementById('settings-bg').classList.add('open');
 }
@@ -8522,21 +8525,25 @@ async function exportData() {
     if(btn) { btn.disabled = false; btn.textContent = originalLabel; }
   }
 }
-function importData() { document.getElementById('s-import').click(); }
-function doImport(e) {
-  const f=e.target.files[0]; if(!f) return;
-  const r=new FileReader();
-  r.onload=ev=>{
-    try{
-      if(!confirm('Replace all data?')) return;
-      const imported = JSON.parse(ev.target.result);
-      DB={...DB,...imported};
-      if(!DB.wird?.length) DB.wird=JSON.parse(JSON.stringify(DEFAULT_WIRD));
-      closeSettings(); init();
-      markUnsaved(); // sync imported data to Drive
-    }catch(e){alert('Invalid file.');}
-  };
-  r.readAsText(f);
+// Downloads one plain .json file containing all app data combined (days,
+// tasks, wird, practices, expenses, profile, etc.) — no zip, no media,
+// just everything in a single file you can open or back up anywhere.
+function exportJsonOnly() {
+  const btn = event?.target;
+  const originalLabel = btn ? btn.textContent : null;
+  try {
+    const { gdrive, ...exportable } = DB;
+    const exportJson = {...exportable, gdrive:{connected:gdrive.connected,lastSync:gdrive.lastSync}};
+    const blob = new Blob([JSON.stringify(exportJson, null, 2)], {type:'application/json'});
+    const u = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = u; a.download = `saados-data-${todayStr()}.json`; a.click();
+    URL.revokeObjectURL(u);
+  } catch(e) {
+    alert('Export failed: ' + (e?.message || e));
+  } finally {
+    if(btn && originalLabel) btn.textContent = originalLabel;
+  }
 }
 
 /* ════════════════════════════════════════════════
