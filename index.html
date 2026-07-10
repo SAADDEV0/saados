@@ -2282,6 +2282,33 @@ textarea.fi { resize: vertical; min-height: 80px; }
 }
 #j-lightbox-close:hover { color: white; }
 
+#j-lightbox-toolbar {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  cursor: default;
+}
+.j-lb-btn, #j-lightbox-toolbar button {
+  background: rgba(255,255,255,0.12);
+  border: 1.5px solid rgba(255,255,255,0.28);
+  color: #f5f0e8;
+  font-family: var(--sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 9px 16px;
+  border-radius: 50px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: all 0.15s var(--ease);
+  white-space: nowrap;
+}
+#j-lightbox-toolbar button:hover:not(:disabled) { background: rgba(255,255,255,0.22); border-color: rgba(255,255,255,0.45); }
+#j-lightbox-toolbar button:disabled { opacity: 0.55; cursor: default; }
+#j-lightbox-toolbar button.done { background: var(--green); border-color: var(--green); }
+
 /* ──────────────────────────────────────────────
    MIZAN — REDESIGNED
 ────────────────────────────────────────────── */
@@ -3416,7 +3443,12 @@ canvas { width: 100%; display: block; }
   <button id="j-lightbox-close" onclick="closeJLightbox()">✕</button>
   <img id="j-lightbox-img" src="" alt="" onclick="event.stopPropagation()" style="display:none" />
   <video id="j-lightbox-vid" controls onclick="event.stopPropagation()" style="display:none;max-width:90vw;max-height:88vh;border-radius:14px;box-shadow:0 8px 48px rgba(0,0,0,0.5)"></video>
+  <div id="j-lightbox-toolbar" onclick="event.stopPropagation()">
+    <button id="j-lb-full-btn" onclick="lbLoadFullRes()">🔍 Load full resolution</button>
+    <button id="j-lb-dl-btn" onclick="lbDownload()">⬇ Download</button>
+  </div>
 </div>
+
 
 <script>
 /* ════════════════════════════════════════════════
@@ -5984,12 +6016,12 @@ function renderSijjilWrite(el, dateLabel) {
         ${mediaCount
           ? `<div class="sj-grid" id="sj-grid">
               ${images.map((img,i) => `
-                <div class="sj-gitem" data-drive-id="${esc(img.driveId||'')}" onclick="openJLightbox('${esc(img.driveId||'')}','image')">
+                <div class="sj-gitem" data-drive-id="${esc(img.driveId||'')}" onclick="openJLightbox('${esc(img.driveId||'')}','image','${esc(img.name||'')}')">
                   <div class="sj-gitem-loader">🖼</div>
                   <button class="sj-gitem-del" onclick="event.stopPropagation();sjDeleteImg(${i})" title="Remove">✕</button>
                 </div>`).join('')}
               ${videos.map((vid,i) => `
-                <div class="sj-gitem" data-drive-id="${esc(vid.driveId||'')}" data-type="video" onclick="openJLightbox('${esc(vid.driveId||'')}','video')">
+                <div class="sj-gitem" data-drive-id="${esc(vid.driveId||'')}" data-type="video" onclick="openJLightbox('${esc(vid.driveId||'')}','video','${esc(vid.name||'')}')">
                   <div class="sj-gitem-loader" style="flex-direction:column;gap:4px">🎬<span style="font-size:10px;opacity:0.5">${esc(vid.name||'')}</span></div>
                   <button class="sj-gitem-del" onclick="event.stopPropagation();sjDeleteVideo(${i})" title="Remove">✕</button>
                 </div>`).join('')}
@@ -6009,12 +6041,14 @@ function renderSijjilWrite(el, dateLabel) {
   const ta = document.getElementById('sj-ta');
   if(ta) { ta.style.height='auto'; ta.style.height=ta.scrollHeight+'px'; }
 
-  // Load images in write mode immediately (they're small thumbnails)
+  // Load images in write mode immediately — as thumbnails, not full photos,
+  // so the grid fills in fast even on a slow connection.
   if(images.length && gdriveToken) {
     images.forEach(img => {
       if(!img.driveId) return;
-      getDriveImgUrl(img.driveId).then(url => {
+      getDriveThumbUrl(img.driveId).then(url => {
         if(!url) return;
+        _galleryUrlCache[img.driveId] = url;
         const item = el.querySelector(`.sj-gitem[data-drive-id="${img.driveId}"]`);
         if(!item) return;
         item.querySelector('.sj-gitem-loader')?.remove();
@@ -6125,8 +6159,9 @@ async function loadAllMedia(allDates) {
     const j = DB.days[ds]?.journal;
     const img = j?.images?.[0];
     if(img?.driveId) {
-      getDriveImgUrl(img.driveId).then(url => {
+      getDriveThumbUrl(img.driveId).then(url => {
         if(!url) return;
+        _galleryUrlCache[img.driveId] = url;
         const container = document.getElementById(`tmc-${ds}`);
         if(!container) return;
         const imgCount = (j.images?.length||0) + (j.videos?.length||0);
@@ -6185,7 +6220,7 @@ async function preloadGallery() {
     if(_galleryFetchPromises[it.driveId]) { await _galleryFetchPromises[it.driveId]; return; }
     const p = (async () => {
       try {
-        const url = await getDriveMediaUrl(it.driveId);
+        const url = it.type === 'video' ? await getDriveMediaUrl(it.driveId) : await getDriveThumbUrl(it.driveId);
         if(url) _galleryUrlCache[it.driveId] = url;
       } catch(e) {}
     })();
@@ -6266,7 +6301,7 @@ function renderGallery(el) {
     h += `<div class="gal-pinterest" id="gal-grid">`;
     items.forEach(({it,i}) => {
       const sel = gallerySelected.has(it.driveId);
-      h += `<div class="gal-item gal-pin-item ${sel?'sel':''}" data-i="${i}" data-drive-id="${esc(it.driveId||'')}" onclick="galleryItemClick('${esc(it.driveId||'')}','${it.type}')">
+      h += `<div class="gal-item gal-pin-item ${sel?'sel':''}" data-i="${i}" data-drive-id="${esc(it.driveId||'')}" onclick="galleryItemClick('${esc(it.driveId||'')}','${it.type}','${esc(it.name||'')}')">
         <div class="gal-item-ph" id="gal-ph-${i}">${it.type==='video' ? '🎬' : '🖼'}</div>
         ${it.type==='video' ? '<div class="gal-play">▶</div>' : ''}
         ${gallerySelectMode ? `<div class="gal-check">${sel?'✓':''}</div>` : ''}
@@ -6279,7 +6314,7 @@ function renderGallery(el) {
     items.forEach(({it,i}, idx) => {
       const span = [1,2,1,1,2,1,1,1][idx % 8]; // varied heights via row-span
       const sel = gallerySelected.has(it.driveId);
-      h += `<div class="gal-item gal-masonry-item span-${span} ${sel?'sel':''}" data-i="${i}" data-drive-id="${esc(it.driveId||'')}" onclick="galleryItemClick('${esc(it.driveId||'')}','${it.type}')">
+      h += `<div class="gal-item gal-masonry-item span-${span} ${sel?'sel':''}" data-i="${i}" data-drive-id="${esc(it.driveId||'')}" onclick="galleryItemClick('${esc(it.driveId||'')}','${it.type}','${esc(it.name||'')}')">
         <div class="gal-item-ph" id="gal-ph-${i}">${it.type==='video' ? '🎬' : '🖼'}</div>
         ${it.type==='video' ? '<div class="gal-play">▶</div>' : ''}
         ${gallerySelectMode ? `<div class="gal-check">${sel?'✓':''}</div>` : ''}
@@ -6350,7 +6385,9 @@ function loadAlbumThumbs() {
     if(!elm) return;
     if(_galleryUrlCache[driveId]) { elm.innerHTML = `<img src="${_galleryUrlCache[driveId]}" alt="">`; return; }
     if(!gdriveToken) return;
-    getDriveMediaUrl(driveId).then(url => {
+    const found = _galleryItems.find(x=>x.driveId===driveId);
+    const loader = found?.type==='video' ? getDriveMediaUrl(driveId) : getDriveThumbUrl(driveId);
+    loader.then(url => {
       if(!url) return;
       _galleryUrlCache[driveId] = url;
       const elm2 = document.getElementById(`alb-thumb-${a.id}`);
@@ -6413,7 +6450,7 @@ function openManageAlbum(id) {
     const apply = url => { const t = document.getElementById(`alb-mng-${it.driveId}`); if(t) t.innerHTML = it.type==='video' ? `<div style="font-size:20px">🎬</div>` : `<img src="${url}" alt="">`; };
     if(_galleryUrlCache[it.driveId]) { apply(_galleryUrlCache[it.driveId]); return; }
     if(!gdriveToken || it.type==='video') return;
-    getDriveMediaUrl(it.driveId).then(url => { if(url){ _galleryUrlCache[it.driveId]=url; apply(url); } }).catch(()=>{});
+    getDriveThumbUrl(it.driveId).then(url => { if(url){ _galleryUrlCache[it.driveId]=url; apply(url); } }).catch(()=>{});
   });
 }
 
@@ -6452,13 +6489,13 @@ function toggleGallerySelectMode() {
   renderSection();
 }
 
-function galleryItemClick(driveId, type) {
+function galleryItemClick(driveId, type, name) {
   if(gallerySelectMode) {
     if(!driveId) return;
     if(gallerySelected.has(driveId)) gallerySelected.delete(driveId); else gallerySelected.add(driveId);
     renderSection();
   } else {
-    openJLightbox(driveId, type);
+    openJLightbox(driveId, type, name);
   }
 }
 
@@ -6525,7 +6562,7 @@ async function loadGalleryMedia(silent=false) {
     }
     const p = (async () => {
       try {
-        const url = await getDriveMediaUrl(it.driveId);
+        const url = it.type === 'video' ? await getDriveMediaUrl(it.driveId) : await getDriveThumbUrl(it.driveId);
         if(url) _galleryUrlCache[it.driveId] = url;
       } catch(e) {}
     })();
@@ -6894,6 +6931,39 @@ async function getDriveMediaUrl(driveId) {
 // alias for backwards compat
 const getDriveImgUrl = getDriveMediaUrl;
 
+// Caches Drive's small pre-made thumbnail link per file, so we only ask
+// Drive for it once per photo even if it's shown in several places (grid,
+// albums, gallery, memories).
+const _thumbLinkCache = {};
+// Requests Drive's own thumbnail (a medium-size preview Drive already
+// generated for the file) instead of downloading the full original photo.
+// Falls back to the full-size image if no thumbnail is available for some
+// reason, so a photo never fails to show — it's just a speed shortcut.
+async function getDriveThumbUrl(driveId) {
+  if(!gdriveToken || !driveId) return null;
+  try {
+    let link = _thumbLinkCache[driveId];
+    if(!link) {
+      const meta = await fetch(`https://www.googleapis.com/drive/v3/files/${driveId}?fields=thumbnailLink`, { headers:{ Authorization:'Bearer '+gdriveToken } });
+      if(!meta.ok) return await getDriveMediaUrl(driveId);
+      const data = await meta.json();
+      if(!data.thumbnailLink) return await getDriveMediaUrl(driveId);
+      // Drive's default thumbnail link is quite small (~s220) — bump the
+      // size up a bit for a sharper "medium" preview that still loads fast.
+      link = data.thumbnailLink.replace(/=s\d+$/, '=s800');
+      _thumbLinkCache[driveId] = link;
+    }
+    const res = await fetch(link, { headers:{ Authorization:'Bearer '+gdriveToken } });
+    if(!res.ok) return await getDriveMediaUrl(driveId);
+    return URL.createObjectURL(await res.blob());
+  } catch(e) {
+    return await getDriveMediaUrl(driveId);
+  }
+}
+// Caches full-resolution blob URLs once a photo's "Load full resolution"
+// button has been pressed, so re-opening it in the lightbox is instant.
+const _fullResUrlCache = {};
+
 // Fetches the raw bytes of a Drive file (for bundling into the export zip),
 // returning null on failure instead of throwing, so one bad file can't abort the whole export.
 async function _driveGetBlob(driveId) {
@@ -6905,32 +6975,112 @@ async function _driveGetBlob(driveId) {
   } catch(e) { return null; }
 }
 
-async function openJLightbox(driveId, type='image') {
+let _lbCurrent = null; // { driveId, type, name } — the item currently open in the lightbox
+
+async function openJLightbox(driveId, type='image', name='') {
   if(!driveId) return;
   const lb = document.getElementById('j-lightbox');
   const imgEl = document.getElementById('j-lightbox-img');
   const vidEl = document.getElementById('j-lightbox-vid');
+  const toolbar = document.getElementById('j-lightbox-toolbar');
+  const fullBtn = document.getElementById('j-lb-full-btn');
   if(!lb) return;
+  _lbCurrent = { driveId, type, name };
   lb.classList.add('open'); document.body.style.overflow = 'hidden';
 
   if(type === 'video') {
     if(imgEl) imgEl.style.display = 'none';
+    if(toolbar) toolbar.style.display = 'none'; // quality toggle is photo-only
     if(vidEl) { vidEl.style.display = 'block'; vidEl.src = ''; }
-    const url = await getDriveMediaUrl(driveId);
-    if(url && vidEl) vidEl.src = url;
+    const url = _galleryUrlCache[driveId] || _fullResUrlCache[driveId] || await getDriveMediaUrl(driveId);
+    if(url && vidEl && _lbCurrent?.driveId === driveId) vidEl.src = url;
   } else {
     if(vidEl) { vidEl.style.display = 'none'; vidEl.src = ''; }
     if(imgEl) { imgEl.style.display = 'block'; imgEl.src = ''; }
-    const url = await getDriveMediaUrl(driveId);
-    if(url && imgEl) imgEl.src = url;
+    if(toolbar) toolbar.style.display = 'flex';
+
+    if(_fullResUrlCache[driveId]) {
+      // Already loaded full quality before — show it straight away.
+      if(imgEl) imgEl.src = _fullResUrlCache[driveId];
+      if(fullBtn) { fullBtn.disabled = true; fullBtn.classList.add('done'); fullBtn.textContent = '✓ Full resolution'; }
+    } else {
+      if(fullBtn) { fullBtn.disabled = false; fullBtn.classList.remove('done'); fullBtn.textContent = '🔍 Load full resolution'; }
+      // Show the thumbnail instantly if we already have one cached, so the
+      // viewer never sits on a blank screen; otherwise fetch one now.
+      if(_galleryUrlCache[driveId]) {
+        if(imgEl) imgEl.src = _galleryUrlCache[driveId];
+      } else {
+        const thumb = await getDriveThumbUrl(driveId);
+        if(thumb) {
+          _galleryUrlCache[driveId] = thumb;
+          if(_lbCurrent?.driveId === driveId && imgEl) imgEl.src = thumb;
+        }
+      }
+    }
   }
 }
+
+// "Load full resolution" button in the lightbox — fetches the original
+// full-size photo from Drive and swaps it in over the thumbnail.
+async function lbLoadFullRes() {
+  if(!_lbCurrent || _lbCurrent.type === 'video') return;
+  const { driveId } = _lbCurrent;
+  const imgEl = document.getElementById('j-lightbox-img');
+  const fullBtn = document.getElementById('j-lb-full-btn');
+  if(_fullResUrlCache[driveId]) {
+    if(imgEl) imgEl.src = _fullResUrlCache[driveId];
+    if(fullBtn) { fullBtn.disabled = true; fullBtn.classList.add('done'); fullBtn.textContent = '✓ Full resolution'; }
+    return;
+  }
+  if(fullBtn) { fullBtn.disabled = true; fullBtn.textContent = 'Loading…'; }
+  const url = await getDriveMediaUrl(driveId);
+  if(url) {
+    _fullResUrlCache[driveId] = url;
+    if(_lbCurrent?.driveId === driveId) {
+      if(imgEl) imgEl.src = url;
+      if(fullBtn) { fullBtn.disabled = true; fullBtn.classList.add('done'); fullBtn.textContent = '✓ Full resolution'; }
+    }
+  } else {
+    if(fullBtn) { fullBtn.disabled = false; fullBtn.textContent = '🔍 Load full resolution'; }
+    alert('Could not load the full-resolution photo.');
+  }
+}
+
+// "Download" button in the lightbox — always saves the full-quality
+// original, even if only the thumbnail has loaded on screen so far.
+async function lbDownload() {
+  if(!_lbCurrent) return;
+  const { driveId, name } = _lbCurrent;
+  const dlBtn = document.getElementById('j-lb-dl-btn');
+  const originalLabel = dlBtn ? dlBtn.textContent : null;
+  try {
+    if(dlBtn) { dlBtn.disabled = true; dlBtn.textContent = 'Downloading…'; }
+    let blob = null;
+    if(_fullResUrlCache[driveId]) {
+      blob = await (await fetch(_fullResUrlCache[driveId])).blob();
+    } else {
+      blob = await _driveGetBlob(driveId);
+    }
+    if(!blob) { alert('Download failed.'); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name || `${driveId}`; a.click();
+    URL.revokeObjectURL(url);
+  } catch(e) {
+    alert('Download failed: ' + (e?.message || e));
+  } finally {
+    if(dlBtn) { dlBtn.disabled = false; dlBtn.textContent = originalLabel; }
+  }
+}
+
 function closeJLightbox() {
   const lb = document.getElementById('j-lightbox');
-  const imgEl = document.getElementById('j-lightbox-img');
   const vidEl = document.getElementById('j-lightbox-vid');
-  if(imgEl?.src?.startsWith('blob:')) URL.revokeObjectURL(imgEl.src);
-  if(vidEl?.src?.startsWith('blob:')) { vidEl.pause(); URL.revokeObjectURL(vidEl.src); vidEl.src=''; }
+  // Note: image/video URLs are shared with the grid/gallery caches and may
+  // still be in use elsewhere on the page, so they're intentionally not
+  // revoked here.
+  if(vidEl) vidEl.pause();
+  _lbCurrent = null;
   lb?.classList.remove('open'); document.body.style.overflow = '';
 }
 document.addEventListener('keydown', e => {
