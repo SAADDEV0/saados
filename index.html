@@ -824,6 +824,58 @@ body {
 .ws-carry-btn:hover { border-color: var(--blue); color: var(--blue); }
 .ws-empty-hint { text-align: center; padding: 40px 20px; color: var(--text4); font-size: 13px; }
 
+/* Capacity warning */
+.ws-capacity-warn {
+  display: flex; align-items: center; gap: 10px; background: var(--rust-bg); color: var(--rust);
+  border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 14px; font-size: 12.5px; font-weight: 500;
+}
+
+/* Due date badge */
+.ws-due-badge { font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 20px; margin-left: 6px; }
+.ws-due-badge.overdue { background: var(--rust-bg); color: var(--rust); }
+.ws-due-badge.soon { background: var(--gold-glow); color: var(--gold); }
+.ws-repeat-badge { font-size: 10.5px; color: var(--text3); margin-left: 6px; }
+
+/* Reorder + inline project move */
+.ws-order-col { display: flex; flex-direction: column; gap: 2px; margin-right: 2px; }
+.ws-order-btn { background: none; border: none; color: var(--text4); cursor: pointer; font-size: 10px; line-height: 1; padding: 2px; }
+.ws-order-btn:hover { color: var(--blue); }
+.ws-inline-proj { font-size: 10.5px; border: none; background: var(--surface2); color: var(--text3); border-radius: 20px; padding: 2px 8px; margin-right: 6px; }
+
+/* Timeline (time-blocking) */
+.ws-timeline-wrap { position: relative; display: flex; margin: 4px 0 22px; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
+.ws-timeline-hours { position: relative; width: 54px; flex-shrink: 0; border-right: 1px solid var(--border); }
+.ws-hour-row { position: absolute; left: 0; right: 0; height: 60px; }
+.ws-hour-label { position: absolute; top: -6px; right: 8px; font-size: 10px; color: var(--text4); }
+.ws-timeline-track { position: relative; flex: 1; background-image: repeating-linear-gradient(to bottom, var(--border) 0, var(--border) 1px, transparent 1px, transparent 60px); }
+.ws-timed-block {
+  position: absolute; left: 6px; right: 6px; border-radius: 8px;
+  background: color-mix(in srgb, var(--proj-color, var(--blue)) 14%, var(--surface));
+  border-left: 3px solid var(--proj-color, var(--blue));
+  padding: 4px 8px; font-size: 11.5px; overflow: hidden; cursor: pointer;
+}
+.ws-timed-block.done { opacity: 0.5; text-decoration: line-through; }
+.ws-timed-time { font-size: 9.5px; font-weight: 600; color: var(--proj-color, var(--blue)); }
+.ws-timed-name { font-weight: 500; color: var(--text); }
+
+/* Week view */
+.ws-week-grid { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+.ws-week-day { display: flex; align-items: center; gap: 12px; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 10px 14px; cursor: pointer; }
+.ws-week-day.is-today { border: 1.5px solid var(--blue); }
+.ws-week-day-label { width: 64px; flex-shrink: 0; }
+.ws-week-day-name { font-size: 12px; font-weight: 600; color: var(--text2); }
+.ws-week-day-date { font-size: 10.5px; color: var(--text4); }
+.ws-week-day-bar { flex: 1; height: 5px; background: var(--cream); border-radius: 3px; overflow: hidden; }
+.ws-week-day-bar-fill { height: 100%; background: var(--blue); border-radius: 3px; }
+.ws-week-day-count { font-size: 11.5px; color: var(--text3); white-space: nowrap; width: 56px; text-align: right; }
+.ws-week-stat-row { display: flex; gap: 10px; margin-bottom: 20px; }
+.ws-week-stat-row .ws-review-stat { flex: 1; flex-direction: column; align-items: flex-start; gap: 4px; }
+
+/* Archive */
+.ws-archive-toggle { font-size: 11.5px; color: var(--text3); text-align: right; margin-bottom: 10px; cursor: pointer; text-decoration: underline; }
+.ws-project-card.archived { opacity: 0.55; }
+.ws-archived-tag { font-size: 10px; font-weight: 600; color: var(--text4); background: var(--surface2); padding: 2px 7px; border-radius: 20px; margin-left: 6px; }
+
 /* ──────────────────────────────────────────────
    SECTION REVEAL
 ────────────────────────────────────────────── */
@@ -3629,6 +3681,10 @@ let sjSearchQuery = '';
 let sijjilDate = todayStr(); // independent date for journal write mode
 let gdriveToken = null;
 let gdriveTokenExpiry = 0; // ms timestamp when current token expires
+let calToken = null;       // separate, optional — Google Calendar (read-only)
+let calTokenExpiry = 0;
+let calConnected = false;
+let calEventsCache = {}; // { [dateStr]: [{id,summary,start,end}] }
 let syncDebounce = null;
 let syncState = 'idle'; // 'idle' | 'syncing' | 'ok' | 'error' | 'offline'
 let driveReady = false; // true only after successful pull or confirmed new account — blocks any push before that
@@ -4234,6 +4290,7 @@ function init() {
   applyTheme(DB.profile.theme||'light');
   document.body.setAttribute('data-mode', DB.appMode||'lifeos');
   currentWsSection = 'wstoday';
+  if(localStorage.getItem('saados_cal_connected')==='1') { calConnected = true; calSilentAuth(); }
   renderNav(); renderHero(); renderSection(true); updateSyncUI();
   updateFabForCurrentMode();
   if (DB.profile?.notifEnabled && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
@@ -8684,6 +8741,11 @@ function saveMalBudget() {
    Fully separate data model from LifeOS/Amal.
 ════════════════════════════════════════════════ */
 let currentWsProjectId = null; // set when viewing a project's detail
+let wsTodayView = 'day'; // 'day' | 'week'
+let wsShowArchived = false;
+const WS_DAY_START_MIN = 6*60;   // timeline window: 6:00 → 23:00
+const WS_DAY_END_MIN   = 23*60;
+const WS_CAPACITY_MIN  = 8*60;   // warn past 8 scheduled hours
 
 function wsProject(id) { return (DB.workstation.projects||[]).find(p=>p.id===id) || null; }
 function wsTasksFor(projectId) { return (DB.workstation.tasks||[]).filter(t=>t.projectId===projectId); }
@@ -8691,6 +8753,73 @@ function wsProjectProgress(id) {
   const tasks = wsTasksFor(id);
   const done  = tasks.filter(t=>t.done).length;
   return { done, total: tasks.length, pct: tasks.length ? Math.round(done/tasks.length*100) : 0 };
+}
+function wsWeekday(dateStr) { return new Date(dateStr+'T12:00:00').getDay(); }
+function wsIsRecurringDueOn(t, dateStr) {
+  if(!t.repeat) return false;
+  if(t.repeat==='daily') return true;
+  if(t.repeat==='weekly') {
+    const anchor = t.scheduledDate || dateStr;
+    return wsWeekday(anchor) === wsWeekday(dateStr);
+  }
+  return false;
+}
+function wsIsDoneOn(t, dateStr) {
+  if(t.repeat) return (t.repeatDoneDates||[]).includes(dateStr);
+  return !!t.done;
+}
+function wsToggleTask(id) {
+  const t = (DB.workstation.tasks||[]).find(x=>x.id===id); if(!t) return;
+  if(t.repeat) {
+    if(!t.repeatDoneDates) t.repeatDoneDates=[];
+    const idx = t.repeatDoneDates.indexOf(currentDate);
+    if(idx>=0) t.repeatDoneDates.splice(idx,1); else t.repeatDoneDates.push(currentDate);
+  } else {
+    t.done = !t.done;
+    t.completedAt = t.done ? Date.now() : null;
+  }
+  markUnsaved(); renderSection();
+}
+function wsSetTaskProject(id, projectId) {
+  const t = (DB.workstation.tasks||[]).find(x=>x.id===id); if(!t) return;
+  t.projectId = projectId || null;
+  markUnsaved(); renderSection();
+}
+function wsMoveTask(id, dir) {
+  const scheduled = (DB.workstation.tasks||[])
+    .filter(t=>t.scheduledDate===currentDate || wsIsRecurringDueOn(t,currentDate))
+    .sort((a,b)=>(a.order||0)-(b.order||0));
+  const idx = scheduled.findIndex(t=>t.id===id);
+  const swapIdx = idx + dir;
+  if(idx<0 || swapIdx<0 || swapIdx>=scheduled.length) return;
+  const a = scheduled[idx], b = scheduled[swapIdx];
+  const tmp = a.order; a.order = b.order; b.order = tmp;
+  markUnsaved(); renderSection();
+}
+function wsDueBadge(t) {
+  if(!t.dueDate) return '';
+  const overdue = t.dueDate < todayStr() && !t.done;
+  const soon = !overdue && t.dueDate <= todayStr();
+  const cls = overdue ? 'overdue' : soon ? 'soon' : '';
+  return `<span class="ws-due-badge ${cls}">${overdue?'⚠ overdue':'due'} ${t.dueDate}</span>`;
+}
+function wsRepeatBadge(t) {
+  if(!t.repeat) return '';
+  return `<span class="ws-repeat-badge">↻ ${t.repeat}</span>`;
+}
+function wsSetTodayView(v) { wsTodayView = v; renderSection(true); }
+function wsToggleShowArchived() { wsShowArchived = !wsShowArchived; renderSection(); }
+function wsArchiveProject(id, val) {
+  const p = wsProject(id); if(!p) return;
+  p.archived = val;
+  markUnsaved(); renderSection();
+}
+function formatTimeLabel(hhmm) {
+  if(!hhmm) return '';
+  const [h,m] = hhmm.split(':').map(Number);
+  const period = h<12 ? 'AM' : 'PM';
+  const h12 = h%12===0 ? 12 : h%12;
+  return `${h12}:${String(m).padStart(2,'0')} ${period}`;
 }
 
 /* ── Projects ───────────────────────────────────── */
@@ -8754,7 +8883,7 @@ function wsBackToProjects() { currentWsProjectId = null; renderSection(true); }
 function openWsAddTask(scheduleToday) {
   wsEnsure();
   const projOpts = `<option value="">No project</option>` +
-    DB.workstation.projects.map(p=>`<option value="${p.id}" ${currentWsProjectId===p.id?'selected':''}>${p.emoji} ${esc(p.name)}</option>`).join('');
+    DB.workstation.projects.filter(p=>!p.archived).map(p=>`<option value="${p.id}" ${currentWsProjectId===p.id?'selected':''}>${p.emoji} ${esc(p.name)}</option>`).join('');
   document.getElementById('bs-content').innerHTML=`
     <div class="bs-title">New task</div>
     <div class="fg"><label class="fl">Task</label>
@@ -8763,8 +8892,20 @@ function openWsAddTask(scheduleToday) {
       <input type="text" class="fi" id="wt-note" placeholder="Optional detail…" /></div>
     <div class="fg"><label class="fl">Project</label>
       <select class="fi" id="wt-project">${projOpts}</select></div>
-    <div class="fg"><label class="fl">Duration (min)</label>
-      <input type="number" class="fi" id="wt-dur" placeholder="30" min="1" max="480" /></div>
+    <div class="fg" style="display:flex;gap:10px">
+      <div style="flex:1"><label class="fl">Duration (min)</label>
+        <input type="number" class="fi" id="wt-dur" placeholder="30" min="1" max="480" /></div>
+      <div style="flex:1"><label class="fl">Start time (optional)</label>
+        <input type="time" class="fi" id="wt-time" /></div>
+    </div>
+    <div class="fg"><label class="fl">Due date (optional)</label>
+      <input type="date" class="fi" id="wt-due" /></div>
+    <div class="fg"><label class="fl">Repeat</label>
+      <select class="fi" id="wt-repeat">
+        <option value="">Does not repeat</option>
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+      </select></div>
     <div class="fg"><label class="fl">Pomodoro sessions</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${[1,2,3,4,5,6,7,8].map(n=>`<div class="pom-pick ${n===4?'sel':''}" data-n="${n}" onclick="selPomSessions(this)">${n}</div>`).join('')}
@@ -8781,6 +8922,9 @@ function submitWsTask() {
   const note = document.getElementById('wt-note').value.trim();
   const projectId = document.getElementById('wt-project').value || null;
   const dur = parseInt(document.getElementById('wt-dur').value)||0;
+  const startTime = document.getElementById('wt-time').value || null;
+  const dueDate = document.getElementById('wt-due').value || null;
+  const repeat = document.getElementById('wt-repeat').value || null;
   const pomSel = document.querySelector('.pom-pick.sel');
   const pomCount = pomSel ? parseInt(pomSel.dataset.n) : 4;
   const scheduleToday = document.getElementById('wt-today').checked;
@@ -8788,6 +8932,7 @@ function submitWsTask() {
   DB.workstation.tasks.push({
     id:genId(), projectId, name, note, duration:dur||undefined, pomSessions:pomCount,
     done:false, scheduledDate: scheduleToday ? currentDate : null,
+    startTime, dueDate, repeat, repeatDoneDates:[],
     order: Date.now(), focusTime:{}, totalFocusSec:0, createdAt:Date.now(), completedAt:null,
   });
   markUnsaved(); closeBS(); renderSection();
@@ -8795,7 +8940,7 @@ function submitWsTask() {
 function openWsEditTask(id) {
   const t = (DB.workstation.tasks||[]).find(x=>x.id===id); if(!t) return;
   const projOpts = `<option value="">No project</option>` +
-    DB.workstation.projects.map(p=>`<option value="${p.id}" ${t.projectId===p.id?'selected':''}>${p.emoji} ${esc(p.name)}</option>`).join('');
+    DB.workstation.projects.filter(p=>!p.archived||p.id===t.projectId).map(p=>`<option value="${p.id}" ${t.projectId===p.id?'selected':''}>${p.emoji} ${esc(p.name)}</option>`).join('');
   const pomPicks = [1,2,3,4,5,6,7,8].map(n=>`<div class="pom-pick ${(t.pomSessions||4)===n?'sel':''}" data-n="${n}" onclick="selPomSessions(this)">${n}</div>`).join('');
   document.getElementById('bs-content').innerHTML=`
     <div class="bs-title">Edit task</div>
@@ -8805,8 +8950,20 @@ function openWsEditTask(id) {
       <input type="text" class="fi" id="wt-note" value="${esc(t.note||'')}" /></div>
     <div class="fg"><label class="fl">Project</label>
       <select class="fi" id="wt-project">${projOpts}</select></div>
-    <div class="fg"><label class="fl">Duration (min)</label>
-      <input type="number" class="fi" id="wt-dur" value="${t.duration||''}" min="1" max="480" /></div>
+    <div class="fg" style="display:flex;gap:10px">
+      <div style="flex:1"><label class="fl">Duration (min)</label>
+        <input type="number" class="fi" id="wt-dur" value="${t.duration||''}" min="1" max="480" /></div>
+      <div style="flex:1"><label class="fl">Start time</label>
+        <input type="time" class="fi" id="wt-time" value="${t.startTime||''}" /></div>
+    </div>
+    <div class="fg"><label class="fl">Due date</label>
+      <input type="date" class="fi" id="wt-due" value="${t.dueDate||''}" /></div>
+    <div class="fg"><label class="fl">Repeat</label>
+      <select class="fi" id="wt-repeat">
+        <option value="" ${!t.repeat?'selected':''}>Does not repeat</option>
+        <option value="daily" ${t.repeat==='daily'?'selected':''}>Daily</option>
+        <option value="weekly" ${t.repeat==='weekly'?'selected':''}>Weekly</option>
+      </select></div>
     <div class="fg"><label class="fl">Pomodoro sessions</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap">${pomPicks}</div></div>
     <button class="submit-btn" onclick="saveWsEditTask('${id}')">Save changes</button>`;
@@ -8820,15 +8977,13 @@ function saveWsEditTask(id) {
   t.note = document.getElementById('wt-note').value.trim();
   t.projectId = document.getElementById('wt-project').value || null;
   t.duration = parseInt(document.getElementById('wt-dur').value)||0;
+  t.startTime = document.getElementById('wt-time').value || null;
+  t.dueDate = document.getElementById('wt-due').value || null;
+  t.repeat = document.getElementById('wt-repeat').value || null;
+  if(t.repeat && !t.repeatDoneDates) t.repeatDoneDates = [];
   const pomSel = document.querySelector('.pom-pick.sel');
   t.pomSessions = pomSel ? parseInt(pomSel.dataset.n) : (t.pomSessions||4);
   markUnsaved(); closeBS(); renderSection();
-}
-function wsToggleTask(id) {
-  const t = (DB.workstation.tasks||[]).find(x=>x.id===id); if(!t) return;
-  t.done = !t.done;
-  t.completedAt = t.done ? Date.now() : null;
-  markUnsaved(); renderSection();
 }
 function wsDeleteTask(id) {
   if(!confirm('Delete this task?')) return;
@@ -8855,20 +9010,30 @@ function wsCarryToTomorrow(id) {
 /* ── Today (daily plan) ─────────────────────────── */
 function renderWsToday(el) {
   wsEnsure();
-  const all = DB.workstation.tasks||[];
-  const scheduled = all.filter(t=>t.scheduledDate===currentDate).sort((a,b)=>(a.done?1:0)-(b.done?1:0) || a.order-b.order);
-  const backlog = all.filter(t=>!t.done && (!t.scheduledDate || t.scheduledDate < currentDate));
-  const done = scheduled.filter(t=>t.done).length;
-  const pct = scheduled.length ? Math.round(done/scheduled.length*100) : 0;
+  const viewToggle = `<div class="theme-row" style="margin-bottom:18px">
+    <div class="th-btn ${wsTodayView==='day'?'sel':''}" onclick="wsSetTodayView('day')">Day</div>
+    <div class="th-btn ${wsTodayView==='week'?'sel':''}" onclick="wsSetTodayView('week')">Week</div>
+  </div>`;
 
   let h = `<div class="s-head">
     <div class="s-kicker">Workstation</div>
-    <div class="s-title">Today</div>
-    <div class="s-sub">Plan the day, then focus.</div>
+    <div class="s-title">${wsTodayView==='week'?'Week':'Today'}</div>
+    <div class="s-sub">${wsTodayView==='week'?'See the whole week at a glance.':'Plan the day, then focus.'}</div>
   </div>`;
+  h += viewToggle;
+
+  if(wsTodayView==='week') { h += wsWeekHtml(); el.innerHTML = h; return; }
+
+  const all = DB.workstation.tasks||[];
+  const scheduled = all.filter(t => t.scheduledDate===currentDate || wsIsRecurringDueOn(t,currentDate))
+    .sort((a,b)=>(wsIsDoneOn(a,currentDate)?1:0)-(wsIsDoneOn(b,currentDate)?1:0) || (a.order||0)-(b.order||0));
+  const backlog = all.filter(t=>!t.repeat && !t.done && (!t.scheduledDate || t.scheduledDate < currentDate));
+  const done = scheduled.filter(t=>wsIsDoneOn(t,currentDate)).length;
+  const pct = scheduled.length ? Math.round(done/scheduled.length*100) : 0;
+  const totalMin = scheduled.reduce((s,t)=>s+(t.duration||0),0);
 
   if(scheduled.length) {
-    h += `<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;padding:12px 16px;background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow-sm)">
+    h += `<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:12px 16px;background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow-sm)">
       <div style="flex:1"><div style="height:5px;background:var(--cream);border-radius:3px;overflow:hidden">
         <div style="height:100%;width:${pct}%;background:${pct===100?'var(--green)':'var(--blue)'};border-radius:3px;transition:width 0.5s var(--ease)"></div>
       </div></div>
@@ -8876,21 +9041,36 @@ function renderWsToday(el) {
     </div>`;
   }
 
+  if(totalMin > WS_CAPACITY_MIN) {
+    h += `<div class="ws-capacity-warn">⚠ You've planned ${(totalMin/60).toFixed(1)}h today — that's more than a typical 8h day. Consider moving something to the backlog.</div>`;
+  }
+
+  const timedTasks = scheduled.filter(t=>t.startTime);
+  if(timedTasks.length) h += wsTimelineHtml(timedTasks);
+
   if(!scheduled.length) {
     h += `<div class="ws-empty-hint">Nothing planned for today yet.<br>Tap ＋ to add a task, or pull one in from the backlog below.</div>`;
   } else {
-    scheduled.forEach(t=>{
+    const projOptsFor = (t) => `<option value="">No project</option>` +
+      DB.workstation.projects.filter(p=>!p.archived||p.id===t.projectId).map(p=>`<option value="${p.id}" ${t.projectId===p.id?'selected':''}>${p.emoji} ${esc(p.name)}</option>`).join('');
+    scheduled.forEach((t,i)=>{
       const p = t.projectId ? wsProject(t.projectId) : null;
+      const isDone = wsIsDoneOn(t,currentDate);
       const focusedSec = t.totalFocusSec||0;
       const focusedMin = focusedSec>0 ? Math.round(focusedSec/60) : 0;
-      h += `<div class="task-row ${t.done?'done':''}" id="wtr-${t.id}">
-        <div class="task-cb ${t.done?'ticked':''}" onclick="wsToggleTask('${t.id}')">${t.done?'✓':''}</div>
-        <div class="task-info">
-          <div class="task-name">${p?`<span class="ws-tag" style="--proj-color:${p.color};background:color-mix(in srgb, ${p.color} 12%, transparent);color:${p.color}">${p.emoji} ${esc(p.name)}</span>`:''}${esc(t.name)}</div>
-          ${t.note?`<div class="task-note">${esc(t.note)}</div>`:''}
-          <div class="task-meta">${t.duration?`⏱ ${t.duration}min`:''}${focusedMin?` · 🍅 ${focusedMin}m focused`:''} · ${t.pomSessions||4} sessions</div>
+      h += `<div class="task-row ${isDone?'done':''}" id="wtr-${t.id}">
+        <div class="ws-order-col">
+          <button class="ws-order-btn" onclick="wsMoveTask('${t.id}',-1)" ${i===0?'disabled style="opacity:.25"':''}>▲</button>
+          <button class="ws-order-btn" onclick="wsMoveTask('${t.id}',1)" ${i===scheduled.length-1?'disabled style="opacity:.25"':''}>▼</button>
         </div>
-        ${!t.done?`<button class="task-focus-btn" onclick="openFocusMode('${t.id}','workstation')" title="Focus">🎯</button>`:''}
+        <div class="task-cb ${isDone?'ticked':''}" onclick="wsToggleTask('${t.id}')">${isDone?'✓':''}</div>
+        <div class="task-info">
+          <div class="task-name">${p?`<span class="ws-tag" style="--proj-color:${p.color};background:color-mix(in srgb, ${p.color} 12%, transparent);color:${p.color}">${p.emoji} ${esc(p.name)}</span>`:''}${esc(t.name)}${wsDueBadge(t)}${wsRepeatBadge(t)}</div>
+          ${t.note?`<div class="task-note">${esc(t.note)}</div>`:''}
+          <div class="task-meta">${t.startTime?`🕐 ${formatTimeLabel(t.startTime)} · `:''}${t.duration?`⏱ ${t.duration}min`:''}${focusedMin?` · 🍅 ${focusedMin}m focused`:''} · ${t.pomSessions||4} sessions</div>
+          <select class="ws-inline-proj" onchange="wsSetTaskProject('${t.id}',this.value)">${projOptsFor(t)}</select>
+        </div>
+        ${!isDone?`<button class="task-focus-btn" onclick="openFocusMode('${t.id}','workstation')" title="Focus">🎯</button>`:''}
         <button class="task-edit-btn" onclick="openWsEditTask('${t.id}')" title="Edit">✎</button>
         <button class="task-del" onclick="wsDeleteTask('${t.id}')">✕</button>
       </div>`;
@@ -8902,34 +9082,121 @@ function renderWsToday(el) {
     backlog.forEach(t=>{
       const p = t.projectId ? wsProject(t.projectId) : null;
       h += `<div class="ws-backlog-item">
-        <span class="ws-bl-name">${p?`<span class="ws-tag" style="color:${p.color}">${p.emoji}</span>`:''}${esc(t.name)}</span>
+        <span class="ws-bl-name">${p?`<span class="ws-tag" style="color:${p.color}">${p.emoji}</span>`:''}${esc(t.name)}${wsDueBadge(t)}</span>
         <button class="ws-bl-add" onclick="wsScheduleToday('${t.id}')">+ Today</button>
       </div>`;
     });
   }
 
+  if(calConnected) h += `<div id="ws-cal-slot" data-date="${currentDate}"></div>`;
+
   el.innerHTML = h;
+  if(calConnected) wsLoadCalendarEvents(currentDate);
+}
+async function wsLoadCalendarEvents(dateStr) {
+  const events = await calFetchEventsFor(dateStr);
+  const slot = document.getElementById('ws-cal-slot');
+  if(!slot || slot.dataset.date !== dateStr) return; // navigated away before this resolved
+  if(!events.length) { slot.innerHTML = ''; return; }
+  slot.innerHTML = `<div class="subsection-title" style="margin-top:20px">📅 From your calendar</div>` +
+    events.map(ev=>{
+      const st = new Date(ev.start), en = new Date(ev.end);
+      const timeLabel = st.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) + ' – ' + en.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+      return `<div class="ws-backlog-item" style="opacity:.85"><span class="ws-bl-name">${esc(ev.summary)} <span style="color:var(--text4);font-size:11px">${timeLabel}</span></span></div>`;
+    }).join('');
+}
+
+/* Timeline (time-blocking view) for tasks with a startTime set */
+function wsTimelineHtml(timedTasks) {
+  let hoursHtml = '';
+  for(let m=WS_DAY_START_MIN, hr=Math.floor(WS_DAY_START_MIN/60); m<=WS_DAY_END_MIN; m+=60, hr++) {
+    const label = hr===0?'12 AM':hr<12?`${hr} AM`:hr===12?'12 PM':`${hr-12} PM`;
+    hoursHtml += `<div class="ws-hour-row" style="top:${m-WS_DAY_START_MIN}px"><span class="ws-hour-label">${label}</span></div>`;
+  }
+  const blocksHtml = timedTasks.map(t=>{
+    const [hh,mm] = t.startTime.split(':').map(Number);
+    const startMin = hh*60+mm;
+    const top = Math.max(0, startMin - WS_DAY_START_MIN);
+    const height = Math.max(26, t.duration||30);
+    const p = t.projectId ? wsProject(t.projectId) : null;
+    const isDone = wsIsDoneOn(t,currentDate);
+    return `<div class="ws-timed-block ${isDone?'done':''}" style="top:${top}px;height:${height}px;--proj-color:${p?p.color:'#284868'}" onclick="openWsEditTask('${t.id}')">
+      <div class="ws-timed-time">${formatTimeLabel(t.startTime)}</div>
+      <div class="ws-timed-name">${esc(t.name)}</div>
+    </div>`;
+  }).join('');
+  const trackHeight = WS_DAY_END_MIN - WS_DAY_START_MIN;
+  return `<div class="ws-timeline-wrap" style="height:${trackHeight}px;overflow-y:auto">
+    <div class="ws-timeline-hours" style="height:${trackHeight}px">${hoursHtml}</div>
+    <div class="ws-timeline-track" style="height:${trackHeight}px">${blocksHtml}</div>
+  </div>`;
+}
+
+/* Week view + weekly review stats */
+function wsWeekHtml() {
+  const anchor = new Date(currentDate+'T12:00:00');
+  const dow = anchor.getDay(); // 0=Sun
+  const mondayOffset = dow===0 ? -6 : 1-dow;
+  const monday = new Date(anchor); monday.setDate(anchor.getDate()+mondayOffset);
+  const dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const all = DB.workstation.tasks||[];
+  let totalPlanned=0, totalDone=0, totalFocusSec=0, busiestDay=null, busiestCount=-1;
+
+  let rows='';
+  for(let i=0;i<7;i++) {
+    const d = new Date(monday); d.setDate(monday.getDate()+i);
+    const ds = d.toISOString().slice(0,10);
+    const dayTasks = all.filter(t=>t.scheduledDate===ds || wsIsRecurringDueOn(t,ds));
+    const doneCount = dayTasks.filter(t=>wsIsDoneOn(t,ds)).length;
+    const pct = dayTasks.length ? Math.round(doneCount/dayTasks.length*100) : 0;
+    totalPlanned += dayTasks.length; totalDone += doneCount;
+    dayTasks.forEach(t=>{ if(!t.repeat && t.scheduledDate===ds) totalFocusSec += (t.totalFocusSec||0); });
+    if(dayTasks.length > busiestCount) { busiestCount = dayTasks.length; busiestDay = dayNames[i]; }
+    const isToday = ds===todayStr();
+    rows += `<div class="ws-week-day ${isToday?'is-today':''}" onclick="wsJumpToDay('${ds}')">
+      <div class="ws-week-day-label"><div class="ws-week-day-name">${dayNames[i]}</div><div class="ws-week-day-date">${d.getDate()} ${d.toLocaleDateString('en-US',{month:'short'})}</div></div>
+      <div class="ws-week-day-bar"><div class="ws-week-day-bar-fill" style="width:${pct}%"></div></div>
+      <div class="ws-week-day-count">${doneCount}/${dayTasks.length}</div>
+    </div>`;
+  }
+
+  const stats = `<div class="ws-week-stat-row">
+    <div class="ws-review-stat"><span style="font-size:11px;color:var(--text3)">Completion rate</span><span class="ws-review-stat-num">${totalPlanned?Math.round(totalDone/totalPlanned*100):0}%</span></div>
+    <div class="ws-review-stat"><span style="font-size:11px;color:var(--text3)">Focus time</span><span class="ws-review-stat-num">${(totalFocusSec/3600).toFixed(1)}h</span></div>
+    <div class="ws-review-stat"><span style="font-size:11px;color:var(--text3)">Busiest day</span><span class="ws-review-stat-num" style="font-size:16px">${busiestCount>0?busiestDay:'—'}</span></div>
+  </div>`;
+
+  return `<div class="ws-week-grid">${rows}</div>${stats}`;
+}
+function wsJumpToDay(dateStr) {
+  currentDate = dateStr; wsTodayView='day';
+  renderHero(); renderSection(true);
 }
 
 /* ── Projects list / detail ─────────────────────── */
 function renderWsProjects(el) {
   wsEnsure();
   if(currentWsProjectId) { renderWsProjectDetail(el); return; }
-  const projects = DB.workstation.projects||[];
+  const all = DB.workstation.projects||[];
+  const archivedCount = all.filter(p=>p.archived).length;
+  const projects = wsShowArchived ? all : all.filter(p=>!p.archived);
   let h = `<div class="s-head">
     <div class="s-kicker">Workstation</div>
     <div class="s-title">Projects</div>
     <div class="s-sub">Everything you're working on.</div>
   </div>`;
+  if(archivedCount) {
+    h += `<div class="ws-archive-toggle" onclick="wsToggleShowArchived()">${wsShowArchived?'Hide':'Show'} archived (${archivedCount})</div>`;
+  }
   if(!projects.length) {
     h += `<div class="ws-empty-hint">No projects yet.<br>Tap ＋ to create your first one.</div>`;
   } else {
     projects.forEach(p=>{
       const prog = wsProjectProgress(p.id);
-      h += `<div class="ws-project-card" style="--proj-color:${p.color}" onclick="openWsProjectDetail('${p.id}')">
+      h += `<div class="ws-project-card ${p.archived?'archived':''}" style="--proj-color:${p.color}" onclick="openWsProjectDetail('${p.id}')">
         <div class="ws-project-emoji" style="--proj-color:${p.color}">${p.emoji}</div>
         <div class="ws-project-info">
-          <div class="ws-project-name">${esc(p.name)}</div>
+          <div class="ws-project-name">${esc(p.name)}${p.archived?'<span class="ws-archived-tag">Archived</span>':''}</div>
           <div class="ws-project-meta">${prog.total ? `${prog.done}/${prog.total} tasks done` : 'No tasks yet'}</div>
           ${prog.total?`<div class="ws-project-bar"><div class="ws-project-bar-fill" style="width:${prog.pct}%;--proj-color:${p.color}"></div></div>`:''}
         </div>
@@ -8946,9 +9213,12 @@ function renderWsProjectDetail(el) {
   let h = `<div class="s-head">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
       <button class="ws-carry-btn" onclick="wsBackToProjects()">‹ All projects</button>
-      <button class="ws-carry-btn" onclick="openWsEditProject('${p.id}')">✎ Edit</button>
+      <div style="display:flex;gap:8px">
+        <button class="ws-carry-btn" onclick="wsArchiveProject('${p.id}',${!p.archived})">${p.archived?'Unarchive':'Archive'}</button>
+        <button class="ws-carry-btn" onclick="openWsEditProject('${p.id}')">✎ Edit</button>
+      </div>
     </div>
-    <div class="s-kicker">${p.emoji} Project</div>
+    <div class="s-kicker">${p.emoji} Project${p.archived?' · Archived':''}</div>
     <div class="s-title">${esc(p.name)}</div>
   </div>`;
   h += `<button class="submit-btn" style="margin-bottom:16px" onclick="openWsAddTask(false)">＋ Add task to this project</button>`;
@@ -8958,30 +9228,30 @@ function renderWsProjectDetail(el) {
     tasks.forEach(t=>{
       const focusedSec = t.totalFocusSec||0;
       const focusedMin = focusedSec>0 ? Math.round(focusedSec/60) : 0;
-      h += `<div class="task-row ${t.done?'done':''}">
-        <div class="task-cb ${t.done?'ticked':''}" onclick="wsToggleTask('${t.id}')">${t.done?'✓':''}</div>
+      const isDone = wsIsDoneOn(t,currentDate);
+      h += `<div class="task-row ${isDone?'done':''}">
+        <div class="task-cb ${isDone?'ticked':''}" onclick="wsToggleTask('${t.id}')">${isDone?'✓':''}</div>
         <div class="task-info">
-          <div class="task-name">${esc(t.name)}</div>
+          <div class="task-name">${esc(t.name)}${wsDueBadge(t)}${wsRepeatBadge(t)}</div>
           ${t.note?`<div class="task-note">${esc(t.note)}</div>`:''}
-          <div class="task-meta">${t.scheduledDate?`📅 ${t.scheduledDate}`:'Backlog'}${t.duration?` · ⏱ ${t.duration}min`:''}${focusedMin?` · 🍅 ${focusedMin}m focused`:''}</div>
+          <div class="task-meta">${t.scheduledDate?`📅 ${t.scheduledDate}`:t.repeat?'Recurring':'Backlog'}${t.startTime?` · 🕐 ${formatTimeLabel(t.startTime)}`:''}${t.duration?` · ⏱ ${t.duration}min`:''}${focusedMin?` · 🍅 ${focusedMin}m focused`:''}</div>
         </div>
-        ${!t.done?`<button class="task-focus-btn" onclick="openFocusMode('${t.id}','workstation')" title="Focus">🎯</button>`:''}
+        ${!isDone?`<button class="task-focus-btn" onclick="openFocusMode('${t.id}','workstation')" title="Focus">🎯</button>`:''}
         <button class="task-edit-btn" onclick="openWsEditTask('${t.id}')" title="Edit">✎</button>
         <button class="task-del" onclick="wsDeleteTask('${t.id}')">✕</button>
       </div>`;
     });
   }
   el.innerHTML = h;
-  el.querySelector('.mf-btn')?.addEventListener('click', ()=>{});
 }
 
 /* ── Review (end-of-day shutdown) ───────────────── */
 function renderWsReview(el) {
   wsEnsure();
   const all = DB.workstation.tasks||[];
-  const todays = all.filter(t=>t.scheduledDate===currentDate);
-  const completed = todays.filter(t=>t.done);
-  const incomplete = todays.filter(t=>!t.done);
+  const todays = all.filter(t=>t.scheduledDate===currentDate || wsIsRecurringDueOn(t,currentDate));
+  const completed = todays.filter(t=>wsIsDoneOn(t,currentDate));
+  const incomplete = todays.filter(t=>!wsIsDoneOn(t,currentDate));
   const review = DB.workstation.reviews[currentDate] || { text:'' };
 
   let h = `<div class="s-head">
@@ -8989,6 +9259,7 @@ function renderWsReview(el) {
     <div class="s-title">Review</div>
     <div class="s-sub">Close the day with intention.</div>
   </div>`;
+  h += `<div class="ws-archive-toggle" style="text-align:left" onclick="wsSetTodayView('week');navigate('wstoday')">See the full week's review ›</div>`;
 
   h += `<div class="ws-review-stat"><span>Planned today</span><span class="ws-review-stat-num">${todays.length}</span></div>`;
   h += `<div class="ws-review-stat"><span>Completed</span><span class="ws-review-stat-num" style="color:var(--green)">${completed.length}</span></div>`;
@@ -8998,8 +9269,8 @@ function renderWsReview(el) {
     h += `<div class="subsection-title" style="margin-top:20px">Didn't get to today</div>`;
     incomplete.forEach(t=>{
       h += `<div class="ws-backlog-item">
-        <span class="ws-bl-name">${esc(t.name)}</span>
-        <button class="ws-carry-btn" onclick="wsCarryToTomorrow('${t.id}')">→ Tomorrow</button>
+        <span class="ws-bl-name">${esc(t.name)}${wsRepeatBadge(t)}</span>
+        ${t.repeat?`<span style="font-size:11px;color:var(--text4)">recurs again</span>`:`<button class="ws-carry-btn" onclick="wsCarryToTomorrow('${t.id}')">→ Tomorrow</button>`}
       </div>`;
     });
   }
@@ -9036,6 +9307,11 @@ function openSettings() {
         <div class="th-btn mode-btn ${DB.appMode==='workstation'?'sel':''}" data-m="workstation" onclick="setAppMode('workstation')">Workstation</div>
       </div>
       <div style="font-size:11px;color:var(--ink4);margin-top:6px">Switches the whole app — Workstation is a separate space for projects and work tasks, kept apart from your LifeOS data.</div>
+    </div>
+    <div class="s-section">
+      <div class="s-section-title">Google Calendar</div>
+      <div style="font-size:11px;color:var(--ink4);margin-bottom:10px">Shows your calendar events alongside Workstation's Today timeline (read-only). Requires the Calendar API enabled on your Google Cloud project.</div>
+      <div id="cal-connect-row">${calConnectRowHtml()}</div>
     </div>
     <div class="s-section">
       <div class="s-section-title">Appearance</div>
@@ -9214,6 +9490,95 @@ async function driveConnect() {
   driveReady = true; // safe to write from now on regardless
   if(loaded) { init(); setSyncState('ok'); }
   else { setSyncState('ok'); }
+}
+
+/* ── Calendar (optional, read-only, isolated from Drive auth) ──
+   Requires the Google Calendar API to be enabled for the same
+   OAuth client (HARDCODED_CID) in Google Cloud Console. If it
+   isn't enabled yet, connecting will just show an error — Drive
+   sync is completely unaffected either way. */
+async function calConnect() {
+  try {
+    await loadGIS();
+    const tokenResponse = await new Promise((res,rej) => {
+      const cl = google.accounts.oauth2.initTokenClient({
+        client_id: HARDCODED_CID,
+        scope: 'https://www.googleapis.com/auth/calendar.readonly',
+        callback: r => r.error ? rej(r.error) : res(r),
+      });
+      cl.requestAccessToken({prompt: ''});
+    });
+    calToken = tokenResponse.access_token;
+    const expiresIn = tokenResponse.expires_in ? parseInt(tokenResponse.expires_in) : 3600;
+    calTokenExpiry = Date.now() + expiresIn * 1000;
+    calConnected = true;
+    calEventsCache = {};
+    localStorage.setItem('saados_cal_connected', '1');
+    setTimeout(() => calSilentAuth(), 55 * 60 * 1000);
+    renderSection();
+    const seg = document.getElementById('cal-connect-row');
+    if(seg) seg.innerHTML = calConnectRowHtml();
+  } catch(e) {
+    alert('Could not connect Google Calendar. Make sure the Calendar API is enabled for your Google Cloud project, then try again.\n\n' + (e?.message || e));
+  }
+}
+async function calSilentAuth() {
+  if(!calConnected) return;
+  try {
+    await loadGIS();
+    const tokenResponse = await new Promise((res,rej) => {
+      const cl = google.accounts.oauth2.initTokenClient({
+        client_id: HARDCODED_CID,
+        scope: 'https://www.googleapis.com/auth/calendar.readonly',
+        callback: r => r.error ? rej(r.error) : res(r),
+      });
+      cl.requestAccessToken({prompt: 'none'});
+    });
+    calToken = tokenResponse.access_token;
+    const expiresIn = tokenResponse.expires_in ? parseInt(tokenResponse.expires_in) : 3600;
+    calTokenExpiry = Date.now() + expiresIn * 1000;
+    setTimeout(() => calSilentAuth(), 55 * 60 * 1000);
+  } catch(e) {
+    console.warn('Calendar silent refresh failed:', e);
+  }
+}
+function calDisconnect() {
+  calToken = null; calTokenExpiry = 0; calConnected = false; calEventsCache = {};
+  localStorage.removeItem('saados_cal_connected');
+  renderSection();
+  const seg = document.getElementById('cal-connect-row');
+  if(seg) seg.innerHTML = calConnectRowHtml();
+}
+function calConnectRowHtml() {
+  return calConnected
+    ? `<button class="ws-carry-btn" onclick="calDisconnect()">Disconnect Calendar</button>`
+    : `<button class="submit-btn" onclick="calConnect()">Connect Google Calendar</button>`;
+}
+// Fetch (and cache) today's events for a given date; renders them into Today once loaded.
+async function calFetchEventsFor(dateStr) {
+  if(!calConnected || !calToken) return [];
+  if(calEventsCache[dateStr]) return calEventsCache[dateStr];
+  if(Date.now() > calTokenExpiry - 60000) await calSilentAuth();
+  if(!calToken) return [];
+  try {
+    const timeMin = `${dateStr}T00:00:00Z`;
+    const timeMax = `${dateStr}T23:59:59Z`;
+    const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${calToken}` } });
+    if(!res.ok) return [];
+    const data = await res.json();
+    const events = (data.items||[])
+      .filter(ev => ev.start?.dateTime) // skip all-day events for the timeline
+      .map(ev => ({
+        id: ev.id, summary: ev.summary || '(no title)',
+        start: ev.start.dateTime, end: ev.end?.dateTime || ev.start.dateTime,
+      }));
+    calEventsCache[dateStr] = events;
+    return events;
+  } catch(e) {
+    console.warn('Calendar fetch failed:', e);
+    return [];
+  }
 }
 
 async function silentDriveAuth(interactive=false) {
@@ -9522,7 +9887,7 @@ function scheduleReminder() {
 const GROQ_URL = '/api/chat';
 
 // Safe top-level keys AI is allowed to touch
-const AI_ALLOWED_KEYS = new Set(['days', 'mal', 'wird', 'practices', 'profile']);
+const AI_ALLOWED_KEYS = new Set(['days', 'mal', 'wird', 'practices', 'profile', 'workstation']);
 
 // Known sub-keys inside a day object
 const AI_DAY_KEYS = new Set(['niyyah', 'tasks', 'prayers', 'nawafil', 'practicesDone', 'wirdCounts', 'journal', 'totalFocusSec', 'focusTime']);
@@ -9689,6 +10054,52 @@ function aiValidatePatch(patch) {
       if (prof.theme && !['light', 'dark', 'sepia'].includes(prof.theme)) return `Invalid theme: "${prof.theme}"`;
       if (prof.fontSize && !['small', 'medium', 'large'].includes(prof.fontSize)) return `Invalid fontSize: "${prof.fontSize}"`;
     }
+
+    // Validate workstation — separate data model from LifeOS/Amal
+    if (key === 'workstation') {
+      wsEnsure();
+      const ws = patch.workstation;
+      if (typeof ws !== 'object' || Array.isArray(ws)) return 'workstation must be an object';
+      const validWsKeys = new Set(['projects', 'newTasks', 'taskUpdates', 'deleteTaskIds', 'reviews']);
+      for (const wk of Object.keys(ws)) { if (!validWsKeys.has(wk)) delete ws[wk]; }
+
+      if (ws.projects !== undefined) {
+        if (!Array.isArray(ws.projects)) return 'workstation.projects must be an array';
+        for (const p of ws.projects) {
+          if (typeof p !== 'object' || !p.id || !p.name) return 'each workstation project must have id and name';
+        }
+        const oldIds = DB.workstation.projects.map(p => p.id);
+        const newIds = ws.projects.map(p => p.id);
+        const removed = oldIds.filter(id => !newIds.includes(id));
+        if (removed.length > 1) return `Refused: trying to remove ${removed.length} workstation projects at once — only 1 deletion allowed per command`;
+      }
+      if (ws.newTasks !== undefined) {
+        if (!Array.isArray(ws.newTasks)) return 'workstation.newTasks must be an array';
+        for (const t of ws.newTasks) {
+          if (typeof t !== 'object' || !t.name) return 'each new workstation task must have a name';
+          if (t.projectId && !DB.workstation.projects.find(p => p.id === t.projectId)) return `Unknown workstation project id: "${t.projectId}"`;
+          if (t.repeat && !['daily', 'weekly'].includes(t.repeat)) return `Invalid repeat value: "${t.repeat}"`;
+        }
+      }
+      if (ws.taskUpdates !== undefined) {
+        if (typeof ws.taskUpdates !== 'object' || Array.isArray(ws.taskUpdates)) return 'workstation.taskUpdates must be an object';
+        const validTaskIds = new Set(DB.workstation.tasks.map(t => t.id));
+        for (const [tid, upd] of Object.entries(ws.taskUpdates)) {
+          if (!validTaskIds.has(tid)) return `Unknown workstation task id: "${tid}"`;
+          if (typeof upd !== 'object' || Array.isArray(upd)) return 'each workstation task update must be an object';
+        }
+      }
+      if (ws.deleteTaskIds !== undefined) {
+        if (!Array.isArray(ws.deleteTaskIds)) return 'workstation.deleteTaskIds must be an array';
+        if (ws.deleteTaskIds.length > 1) return 'Refused: only 1 workstation task deletion allowed per command';
+      }
+      if (ws.reviews !== undefined) {
+        if (typeof ws.reviews !== 'object' || Array.isArray(ws.reviews)) return 'workstation.reviews must be an object';
+        for (const dk of Object.keys(ws.reviews)) {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(dk)) return `Invalid workstation review date key: "${dk}"`;
+        }
+      }
+    }
   }
 
   return null;
@@ -9732,6 +10143,7 @@ function aiBuildContext() {
   return {
     today: today,
     currentSection: currentSection,
+    appMode: DB.appMode || 'lifeos',
     last7days: last7,
     mal: {
       budget: DB.mal?.budget || 0,
@@ -9747,6 +10159,27 @@ function aiBuildContext() {
       fontSize: DB.profile?.fontSize || 'medium',
       timezone: DB.profile?.timezone || 'Africa/Casablanca',
     },
+    workstation: aiBuildWorkstationContext(),
+  };
+}
+
+// Lean Workstation snapshot: projects, today's plan, backlog, upcoming due
+// dates, and recent reviews — NOT the entire task history (unbounded).
+function aiBuildWorkstationContext() {
+  wsEnsure();
+  const today = todayStr();
+  const tasks = DB.workstation.tasks || [];
+  const toLean = t => ({
+    id: t.id, name: t.name, projectId: t.projectId, note: t.note || '',
+    done: wsIsDoneOn(t, today), scheduledDate: t.scheduledDate, startTime: t.startTime || null,
+    dueDate: t.dueDate || null, repeat: t.repeat || null, duration: t.duration || null,
+  });
+  return {
+    projects: DB.workstation.projects.map(p => ({ id: p.id, name: p.name, emoji: p.emoji, color: p.color, archived: !!p.archived })),
+    todayTasks: tasks.filter(t => t.scheduledDate === today || wsIsRecurringDueOn(t, today)).map(toLean),
+    backlogTasks: tasks.filter(t => !t.repeat && !t.done && (!t.scheduledDate || t.scheduledDate < today)).slice(0, 30).map(toLean),
+    upcomingDue: tasks.filter(t => t.dueDate && t.dueDate >= today && !t.done).slice(0, 15).map(toLean),
+    recentReviews: Object.fromEntries(Object.entries(DB.workstation.reviews || {}).slice(-5)),
   };
 }
 
@@ -9881,6 +10314,9 @@ function aiSnapshotForPatch(patch) {
   if (patch.profile) {
     snap.profile = DB.profile ? JSON.parse(JSON.stringify(DB.profile)) : null;
   }
+  if (patch.workstation) {
+    snap.workstation = JSON.parse(JSON.stringify(DB.workstation));
+  }
   return snap;
 }
 
@@ -9904,6 +10340,7 @@ function aiUndo() {
     DB.profile = snap.profile;
     if (DB.profile.theme) applyTheme(DB.profile.theme);
   }
+  if (snap.workstation !== undefined) DB.workstation = snap.workstation;
 
   _aiLastSnapshot = null;
   clearTimeout(_aiUndoTimer);
@@ -9979,6 +10416,44 @@ function aiApplyPatch(patch) {
     if (!DB.profile) DB.profile = {};
     Object.assign(DB.profile, patch.profile);
     if (patch.profile.theme) applyTheme(patch.profile.theme);
+  }
+
+  // Workstation — separate data model; projects full-replace, tasks are
+  // additive/targeted-update only (list is unbounded so we never let the
+  // model resend/replace the whole thing).
+  if (patch.workstation) {
+    wsEnsure();
+    const ws = patch.workstation;
+    if (ws.projects) DB.workstation.projects = ws.projects;
+    if (ws.newTasks) {
+      for (const t of ws.newTasks) {
+        DB.workstation.tasks.push({
+          id: genId(), projectId: t.projectId || null, name: t.name, note: t.note || '',
+          duration: t.duration || undefined, pomSessions: t.pomSessions || 4, done: false,
+          scheduledDate: t.scheduledDate || null, startTime: t.startTime || null, dueDate: t.dueDate || null,
+          repeat: t.repeat || null, repeatDoneDates: [], order: Date.now(),
+          focusTime: {}, totalFocusSec: 0, createdAt: Date.now(), completedAt: null,
+        });
+      }
+    }
+    if (ws.taskUpdates) {
+      const allowedFields = ['name','note','projectId','duration','startTime','dueDate','repeat','done','scheduledDate'];
+      for (const [tid, upd] of Object.entries(ws.taskUpdates)) {
+        const t = DB.workstation.tasks.find(x => x.id === tid);
+        if (!t) continue;
+        for (const k of allowedFields) if (upd[k] !== undefined) t[k] = upd[k];
+        if (upd.done !== undefined) t.completedAt = upd.done ? Date.now() : null;
+      }
+    }
+    if (ws.deleteTaskIds) {
+      DB.workstation.tasks = DB.workstation.tasks.filter(t => !ws.deleteTaskIds.includes(t.id));
+    }
+    if (ws.reviews) {
+      for (const [dk, rv] of Object.entries(ws.reviews)) {
+        if (!DB.workstation.reviews[dk]) DB.workstation.reviews[dk] = { text: '', createdAt: Date.now() };
+        if (rv.text !== undefined) DB.workstation.reviews[dk].text = rv.text;
+      }
+    }
   }
 }
 
@@ -10105,8 +10580,13 @@ mal.budget: number
 wird: full array of {id,ar,en,target} — include ALL existing items from context.wirdList plus your change, max 1 deletion per command
 practices: full array of {id,name,ar,category,emoji,color} — include ALL existing items from context.practicesList plus your change, max 1 deletion per command, category one of ibadah|ilm|jism|ruh|dunya
 profile: {name, theme:"light"|"dark"|"sepia", fontSize:"small"|"medium"|"large", timezone}
-DO NOT include: recentExpenses, last7days, wirdList, practicesList, index, currentSection, or any other read-only context field.
-NEVER invent a wird or practice id — only use ids already present in context.wirdList / context.practicesList.`;
+workstation.projects: full array of {id,name,emoji,color,archived} — include ALL existing items from context.workstation.projects plus your change, max 1 deletion per command
+workstation.newTasks: array of NEW work tasks only {name,note,projectId,duration,startTime,dueDate,repeat:"daily"|"weekly"|null,scheduledDate} — projectId must be an id from context.workstation.projects; scheduledDate "${todayStr()}" schedules for today, omit/null leaves it in the backlog
+workstation.taskUpdates: {[taskId]: {any of name,note,projectId,duration,startTime,dueDate,repeat,done,scheduledDate}} — taskId must come from context.workstation (todayTasks/backlogTasks/upcomingDue), only include fields that change
+workstation.deleteTaskIds: array of existing workstation task ids to delete, max 1 per command
+workstation.reviews: {[YYYY-MM-DD]: {text}} — for saving/updating a Workstation daily reflection
+DO NOT include: recentExpenses, last7days, wirdList, practicesList, index, currentSection, appMode, or any other read-only context field.
+NEVER invent a wird, practice, workstation project, or workstation task id — only use ids already present in context.`;
 
   try {
     const messages = [
