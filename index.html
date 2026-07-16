@@ -757,6 +757,74 @@ body {
 }
 
 /* ──────────────────────────────────────────────
+   WORKSTATION MODE — accent overrides
+   Same components, cooler accent so it reads as a
+   distinct space rather than a reskin of LifeOS.
+────────────────────────────────────────────── */
+[data-mode="workstation"] {
+  --nav-active-bg: var(--blue);
+  --nav-active-text: #f0ece4;
+}
+[data-mode="workstation"] #fab { background: var(--blue); }
+[data-mode="workstation"] #fab:hover { background: #34597e; }
+[data-mode="workstation"] .hero-today-pill { background: var(--blue-bg); color: var(--blue); }
+[data-mode="workstation"] .task-cb.ticked { background: var(--blue); border-color: var(--blue); }
+[data-mode="workstation"] .task-focus-btn:hover { color: var(--blue); }
+
+/* ──────────────────────────────────────────────
+   WORKSTATION — Projects / Tasks / Review
+────────────────────────────────────────────── */
+.ws-project-card {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--surface); border-radius: var(--radius);
+  box-shadow: var(--shadow-sm); padding: 14px 16px; margin-bottom: 10px;
+  border-left: 3px solid var(--proj-color, var(--blue));
+  cursor: pointer; transition: box-shadow 0.2s;
+}
+.ws-project-card:hover { box-shadow: var(--shadow-md); }
+.ws-project-emoji {
+  width: 38px; height: 38px; border-radius: 10px;
+  background: color-mix(in srgb, var(--proj-color, var(--blue)) 12%, var(--surface2));
+  display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0;
+}
+.ws-project-info { flex: 1; min-width: 0; }
+.ws-project-name { font-size: 14.5px; font-weight: 600; color: var(--text); }
+.ws-project-meta { font-size: 11.5px; color: var(--text3); margin-top: 2px; }
+.ws-project-bar { height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; margin-top: 6px; }
+.ws-project-bar-fill { height: 100%; background: var(--proj-color, var(--blue)); border-radius: 2px; transition: width 0.4s var(--ease); }
+.ws-project-del { color: var(--text4); background: none; border: none; font-size: 14px; cursor: pointer; padding: 4px; flex-shrink: 0; }
+.ws-project-del:hover { color: var(--rust); }
+
+.ws-backlog-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  background: var(--surface2); margin-bottom: 6px; font-size: 13px;
+}
+.ws-backlog-item .ws-bl-name { flex: 1; color: var(--text2); }
+.ws-backlog-item .ws-bl-add {
+  background: var(--blue); color: #fff; border: none; border-radius: 20px;
+  padding: 4px 12px; font-size: 11px; font-weight: 600; cursor: pointer;
+}
+.ws-backlog-item .ws-bl-add:hover { background: #34597e; }
+.ws-tag {
+  display: inline-block; font-size: 10.5px; font-weight: 600; padding: 2px 8px;
+  border-radius: 20px; background: var(--proj-color-bg, var(--blue-bg)); color: var(--proj-color, var(--blue));
+  margin-right: 6px;
+}
+.ws-review-stat {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-sm);
+  padding: 14px 16px; margin-bottom: 10px;
+}
+.ws-review-stat-num { font-size: 22px; font-weight: 600; font-family: var(--serif); }
+.ws-carry-btn {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text2);
+  border-radius: 20px; padding: 4px 12px; font-size: 11px; font-weight: 600; cursor: pointer;
+}
+.ws-carry-btn:hover { border-color: var(--blue); color: var(--blue); }
+.ws-empty-hint { text-align: center; padding: 40px 20px; color: var(--text4); font-size: 13px; }
+
+/* ──────────────────────────────────────────────
    SECTION REVEAL
 ────────────────────────────────────────────── */
 #section-content {
@@ -3463,6 +3531,12 @@ const NAV = [
   { id:'mizan',     en:'Mizan',     ar:'ميزان',   icon:'⚖' },
   { id:'mal',       en:'Māl',       ar:'مال',     icon:'◎' },
 ];
+const WS_NAV = [
+  { id:'wstoday',    en:'Today',    ar:'اليوم',   icon:'☀' },
+  { id:'wsprojects', en:'Projects', ar:'مشاريع',  icon:'▣' },
+  { id:'wsreview',   en:'Review',   ar:'مراجعة',  icon:'✓' },
+];
+const WS_PROJECT_COLORS = ['#284868','#3a6e4c','#8a3828','#6a4c93','#b07818','#4a6572'];
 const BLOCKS = [
   { id:'fajr',    en:'After Fajr',    ar:'بعد الفجر',   color:'#7a9ec8', icon:'🌙', time:'Fajr → Dhuhr',   note:'Early morning' },
   { id:'dhuhr',   en:'After Dhuhr',   ar:'بعد الظهر',   color:'#c8a55c', icon:'☀️',  time:'Dhuhr → Asr',    note:'Midday block' },
@@ -3537,8 +3611,16 @@ let DB = {
   mal: { budget: 0, expenses: [] },
   readQueue: [],
   albums: [], // memory albums (playlists of images): {id, name, driveIds:[], thumbDriveId}
+  appMode: 'lifeos', // 'lifeos' | 'workstation'
+  // Workstation — fully separate data model from Amal/LifeOS tasks.
+  workstation: {
+    projects: [], // {id, name, emoji, color, archived, createdAt}
+    tasks: [],    // {id, projectId|null, name, note, duration, pomSessions, done, scheduledDate|null, order, focusTime:{}, totalFocusSec, createdAt, completedAt}
+    reviews: {},  // {[YYYY-MM-DD]: {text, createdAt}}
+  },
 };
 let currentSection = 'niyyah';
+let currentWsSection = 'wstoday';
 let mizanPeriod = 'today'; // 'today' | '7d' | '30d' | '365d'
 let currentDate = todayStr();
 let sijjilMode = 'write'; // 'write' | 'memories' | 'gallery'
@@ -3722,14 +3804,17 @@ let focusState = {
   startTs:          null,
 };
 
-function openFocusMode(taskId) {
-  const day  = getDay(currentDate);
-  const task = (day.tasks||[]).find(t=>t.id===taskId);
+function openFocusMode(taskId, source) {
+  source = source || 'lifeos';
+  const task = source==='workstation'
+    ? (DB.workstation.tasks||[]).find(t=>t.id===taskId)
+    : (getDay(currentDate).tasks||[]).find(t=>t.id===taskId);
   if(!task) return;
 
   // Stop any existing timer first
   if(focusState.intervalId) { clearInterval(focusState.intervalId); focusState.intervalId = null; }
 
+  focusState.source        = source;
   focusState.taskId        = taskId;
   focusState.taskName      = task.name;
   focusState.taskNote      = task.note||'';
@@ -3974,12 +4059,21 @@ function focusRenderDots() {
 
 function focusSaveTime() {
   if(!focusState.taskId || focusState.elapsed<=0) return;
-  const day = getDay(currentDate);
-  if(!day.focusTime) day.focusTime = {};
-  day.focusTime[focusState.taskId] = (day.focusTime[focusState.taskId]||0) + focusState.elapsed;
-  // total day focus
-  if(!day.totalFocusSec) day.totalFocusSec=0;
-  day.totalFocusSec += focusState.elapsed;
+  if(focusState.source==='workstation') {
+    const t = (DB.workstation.tasks||[]).find(x=>x.id===focusState.taskId);
+    if(t) {
+      if(!t.focusTime) t.focusTime = {};
+      t.focusTime[focusState.taskId] = (t.focusTime[focusState.taskId]||0) + focusState.elapsed;
+      t.totalFocusSec = (t.totalFocusSec||0) + focusState.elapsed;
+    }
+  } else {
+    const day = getDay(currentDate);
+    if(!day.focusTime) day.focusTime = {};
+    day.focusTime[focusState.taskId] = (day.focusTime[focusState.taskId]||0) + focusState.elapsed;
+    // total day focus
+    if(!day.totalFocusSec) day.totalFocusSec=0;
+    day.totalFocusSec += focusState.elapsed;
+  }
   focusState.elapsed = 0;
   markUnsaved();
 }
@@ -4128,10 +4222,20 @@ function applyTheme(t) { document.documentElement.setAttribute('data-theme',t); 
 /* ════════════════════════════════════════════════
    INIT
 ════════════════════════════════════════════════ */
+function wsEnsure() {
+  if(!DB.workstation) DB.workstation = { projects:[], tasks:[], reviews:{} };
+  if(!DB.workstation.projects) DB.workstation.projects = [];
+  if(!DB.workstation.tasks) DB.workstation.tasks = [];
+  if(!DB.workstation.reviews) DB.workstation.reviews = {};
+  if(!DB.appMode) DB.appMode = 'lifeos';
+}
 function init() {
+  wsEnsure();
   applyTheme(DB.profile.theme||'light');
+  document.body.setAttribute('data-mode', DB.appMode||'lifeos');
+  currentWsSection = 'wstoday';
   renderNav(); renderHero(); renderSection(true); updateSyncUI();
-  document.getElementById('fab').style.display = 'flex';
+  updateFabForCurrentMode();
   if (DB.profile?.notifEnabled && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
     scheduleReminder();
   }
@@ -4142,28 +4246,61 @@ function init() {
 ════════════════════════════════════════════════ */
 function renderNav() {
   const nav = document.getElementById('float-nav');
-  nav.innerHTML = NAV.map(n=>`
-    <div class="fn-item ${currentSection===n.id?'active':''}" onclick="navigate('${n.id}')">
+  const isWs = DB.appMode === 'workstation';
+  const list = isWs ? WS_NAV : NAV;
+  const active = isWs ? currentWsSection : currentSection;
+  nav.innerHTML = list.map(n=>`
+    <div class="fn-item ${active===n.id?'active':''}" onclick="navigate('${n.id}')">
       <div class="fn-icon">${n.icon}</div>
       <div class="fn-label">${n.en}</div>
     </div>`).join('');
 }
 function navigate(id) {
-  currentSection=id; renderNav(); renderSection(true);
+  if(DB.appMode==='workstation') currentWsSection=id; else currentSection=id;
+  renderNav(); renderSection(true);
+  updateFabForCurrentMode();
+}
+function updateFabForCurrentMode() {
   const fab = document.getElementById('fab');
-  if(id==='mal') {
+  if(DB.appMode==='workstation') {
+    fab.style.display = (currentWsSection==='wstoday'||currentWsSection==='wsprojects') ? 'flex' : 'none';
+    fab.onclick = currentWsSection==='wsprojects' ? openWsAddProject : openWsAddTask;
+    return;
+  }
+  if(currentSection==='mal') {
     fab.style.display = 'flex';
     fab.onclick = openMalSheet;
   } else {
     fab.onclick = openFab;
-    fab.style.display = (id==='niyyah'||id==='amal') ? 'flex' : 'none';
+    fab.style.display = (currentSection==='niyyah'||currentSection==='amal') ? 'flex' : 'none';
   }
+}
+
+/* ════════════════════════════════════════════════
+   APP MODE — LifeOS ⇄ Workstation
+════════════════════════════════════════════════ */
+function setAppMode(mode) {
+  if(DB.appMode === mode) return;
+  DB.appMode = mode;
+  markUnsaved();
+  document.body.setAttribute('data-mode', mode);
+  currentSection = 'niyyah';
+  currentWsSection = 'wstoday';
+  renderNav();
+  renderHero();
+  renderSection(true);
+  updateFabForCurrentMode();
+  // refresh settings toggle UI if open
+  const seg = document.getElementById('mode-seg');
+  if(seg) seg.querySelectorAll('.mode-btn').forEach(b=>b.classList.toggle('sel', b.dataset.m===mode));
 }
 
 /* ════════════════════════════════════════════════
    HERO
 ════════════════════════════════════════════════ */
 function renderHero() {
+  const brandEl = document.querySelector('.hero-brand');
+  if(brandEl) brandEl.textContent = DB.appMode==='workstation' ? 'Workstation' : 'SaadOs';
   const d = new Date(currentDate+'T12:00:00');
   const isToday = currentDate===todayStr();
   document.getElementById('hero-day').innerHTML =
@@ -4192,6 +4329,15 @@ function renderSection(hard) {
     el.scrollTop = 0;
     // restart animation
     el.style.animation='none'; el.offsetHeight; el.style.animation='';
+  }
+  if(DB.appMode === 'workstation') {
+    switch(currentWsSection) {
+      case 'wstoday':    renderWsToday(el);    break;
+      case 'wsprojects': renderWsProjects(el); break;
+      case 'wsreview':   renderWsReview(el);   break;
+    }
+    if(!hard) el.scrollTop = keptScroll;
+    return;
   }
   switch(currentSection) {
     case 'niyyah':    renderNiyyah(el); break;
@@ -7368,6 +7514,8 @@ async function pushProfile() {
     onboarded:DB.onboarded, gdrive:{ lastSync:DB.gdrive.lastSync },
     mal: DB.mal ? { budget: DB.mal.budget || 0, expenses: DB.mal.expenses || [] } : { budget: 0, expenses: [] },
     albums: DB.albums || [],
+    appMode: DB.appMode || 'lifeos',
+    workstation: DB.workstation || { projects:[], tasks:[], reviews:{} },
   }, existingId);
 }
 
@@ -7473,6 +7621,14 @@ async function drivePull(silent=false) {
         }
       }
       DB.albums = Array.isArray(p.albums) ? p.albums : (DB.albums || []);
+      if(p.appMode) DB.appMode = p.appMode;
+      if(p.workstation) {
+        DB.workstation = {
+          projects: p.workstation.projects || [],
+          tasks: p.workstation.tasks || [],
+          reviews: p.workstation.reviews || {},
+        };
+      }
     }
 
     // ── 4. Apply day data ─────────────────────────────────────────────────
@@ -8524,6 +8680,345 @@ function saveMalBudget() {
 }
 
 /* ════════════════════════════════════════════════
+   WORKSTATION — Projects, Tasks, Daily Plan, Review
+   Fully separate data model from LifeOS/Amal.
+════════════════════════════════════════════════ */
+let currentWsProjectId = null; // set when viewing a project's detail
+
+function wsProject(id) { return (DB.workstation.projects||[]).find(p=>p.id===id) || null; }
+function wsTasksFor(projectId) { return (DB.workstation.tasks||[]).filter(t=>t.projectId===projectId); }
+function wsProjectProgress(id) {
+  const tasks = wsTasksFor(id);
+  const done  = tasks.filter(t=>t.done).length;
+  return { done, total: tasks.length, pct: tasks.length ? Math.round(done/tasks.length*100) : 0 };
+}
+
+/* ── Projects ───────────────────────────────────── */
+function openWsAddProject() {
+  wsEnsure();
+  const emojiGrid=EMOJIS.map((e,i)=>`<div class="eg-opt ${i===0?'sel':''}" onclick="selEmoji(this)">${e}</div>`).join('');
+  const colGrid=COLORS.map((c,i)=>`<div class="cg-swatch ${i===0?'sel':''}" style="background:${c}" data-c="${c}" onclick="selColor(this)"></div>`).join('');
+  document.getElementById('modal-content').innerHTML=`
+    <div class="modal-title">New project</div>
+    <div class="fg"><label class="fl">Name</label><input type="text" class="fi" id="wp-name" placeholder="Website redesign…" /></div>
+    <div class="fg"><label class="fl">Emoji</label><div class="emoji-grid">${emojiGrid}</div></div>
+    <div class="fg"><label class="fl">Color</label><div class="color-grid">${colGrid}</div></div>
+    <div class="modal-footer">
+      <button class="mf-btn" onclick="closeModal()">Cancel</button>
+      <button class="mf-btn pri" onclick="submitWsProject()">Add</button>
+    </div>`;
+  document.getElementById('modal-bg').classList.add('open');
+}
+function submitWsProject() {
+  const name = document.getElementById('wp-name').value.trim(); if(!name) return;
+  const emoji = document.querySelector('.eg-opt.sel')?.textContent||'▣';
+  const color = document.querySelector('.cg-swatch.sel')?.dataset.c||COLORS[0];
+  wsEnsure();
+  DB.workstation.projects.push({id:genId(),name,emoji,color,archived:false,createdAt:Date.now()});
+  markUnsaved(); closeModal(); renderSection();
+}
+function openWsEditProject(id) {
+  const p = wsProject(id); if(!p) return;
+  const emojiGrid=EMOJIS.map(e=>`<div class="eg-opt ${e===p.emoji?'sel':''}" onclick="selEmoji(this)">${e}</div>`).join('');
+  const colGrid=COLORS.map(c=>`<div class="cg-swatch ${c===p.color?'sel':''}" style="background:${c}" data-c="${c}" onclick="selColor(this)"></div>`).join('');
+  document.getElementById('modal-content').innerHTML=`
+    <div class="modal-title">Edit project</div>
+    <div class="fg"><label class="fl">Name</label><input type="text" class="fi" id="wp-name" value="${esc(p.name)}" /></div>
+    <div class="fg"><label class="fl">Emoji</label><div class="emoji-grid">${emojiGrid}</div></div>
+    <div class="fg"><label class="fl">Color</label><div class="color-grid">${colGrid}</div></div>
+    <div class="modal-footer">
+      <button class="mf-btn" onclick="closeModal()">Cancel</button>
+      <button class="mf-btn pri" onclick="saveWsEditProject('${id}')">Save</button>
+    </div>`;
+  document.getElementById('modal-bg').classList.add('open');
+}
+function saveWsEditProject(id) {
+  const p = wsProject(id); if(!p) return;
+  const name = document.getElementById('wp-name').value.trim(); if(!name) return;
+  p.name = name;
+  p.emoji = document.querySelector('.eg-opt.sel')?.textContent||p.emoji;
+  p.color = document.querySelector('.cg-swatch.sel')?.dataset.c||p.color;
+  markUnsaved(); closeModal(); renderSection();
+}
+function deleteWsProject(id) {
+  if(!confirm('Delete this project? Its tasks will move to "No project" rather than being deleted.')) return;
+  DB.workstation.projects = DB.workstation.projects.filter(p=>p.id!==id);
+  (DB.workstation.tasks||[]).forEach(t=>{ if(t.projectId===id) t.projectId=null; });
+  if(currentWsProjectId===id) currentWsProjectId=null;
+  markUnsaved(); renderSection();
+}
+function openWsProjectDetail(id) { currentWsProjectId = id; renderSection(true); }
+function wsBackToProjects() { currentWsProjectId = null; renderSection(true); }
+
+/* ── Tasks ──────────────────────────────────────── */
+function openWsAddTask(scheduleToday) {
+  wsEnsure();
+  const projOpts = `<option value="">No project</option>` +
+    DB.workstation.projects.map(p=>`<option value="${p.id}" ${currentWsProjectId===p.id?'selected':''}>${p.emoji} ${esc(p.name)}</option>`).join('');
+  document.getElementById('bs-content').innerHTML=`
+    <div class="bs-title">New task</div>
+    <div class="fg"><label class="fl">Task</label>
+      <input type="text" class="fi" id="wt-name" placeholder="What needs doing?" /></div>
+    <div class="fg"><label class="fl">Note</label>
+      <input type="text" class="fi" id="wt-note" placeholder="Optional detail…" /></div>
+    <div class="fg"><label class="fl">Project</label>
+      <select class="fi" id="wt-project">${projOpts}</select></div>
+    <div class="fg"><label class="fl">Duration (min)</label>
+      <input type="number" class="fi" id="wt-dur" placeholder="30" min="1" max="480" /></div>
+    <div class="fg"><label class="fl">Pomodoro sessions</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${[1,2,3,4,5,6,7,8].map(n=>`<div class="pom-pick ${n===4?'sel':''}" data-n="${n}" onclick="selPomSessions(this)">${n}</div>`).join('')}
+      </div></div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);margin:4px 0 14px">
+      <input type="checkbox" id="wt-today" ${scheduleToday!==false?'checked':''} style="width:16px;height:16px" /> Schedule for today
+    </label>
+    <button class="submit-btn" onclick="submitWsTask()">Add task</button>`;
+  document.getElementById('bs-bg').classList.add('open');
+  setTimeout(()=>document.getElementById('wt-name').focus(),120);
+}
+function submitWsTask() {
+  const name = document.getElementById('wt-name').value.trim(); if(!name) return;
+  const note = document.getElementById('wt-note').value.trim();
+  const projectId = document.getElementById('wt-project').value || null;
+  const dur = parseInt(document.getElementById('wt-dur').value)||0;
+  const pomSel = document.querySelector('.pom-pick.sel');
+  const pomCount = pomSel ? parseInt(pomSel.dataset.n) : 4;
+  const scheduleToday = document.getElementById('wt-today').checked;
+  wsEnsure();
+  DB.workstation.tasks.push({
+    id:genId(), projectId, name, note, duration:dur||undefined, pomSessions:pomCount,
+    done:false, scheduledDate: scheduleToday ? currentDate : null,
+    order: Date.now(), focusTime:{}, totalFocusSec:0, createdAt:Date.now(), completedAt:null,
+  });
+  markUnsaved(); closeBS(); renderSection();
+}
+function openWsEditTask(id) {
+  const t = (DB.workstation.tasks||[]).find(x=>x.id===id); if(!t) return;
+  const projOpts = `<option value="">No project</option>` +
+    DB.workstation.projects.map(p=>`<option value="${p.id}" ${t.projectId===p.id?'selected':''}>${p.emoji} ${esc(p.name)}</option>`).join('');
+  const pomPicks = [1,2,3,4,5,6,7,8].map(n=>`<div class="pom-pick ${(t.pomSessions||4)===n?'sel':''}" data-n="${n}" onclick="selPomSessions(this)">${n}</div>`).join('');
+  document.getElementById('bs-content').innerHTML=`
+    <div class="bs-title">Edit task</div>
+    <div class="fg"><label class="fl">Task</label>
+      <input type="text" class="fi" id="wt-name" value="${esc(t.name)}" /></div>
+    <div class="fg"><label class="fl">Note</label>
+      <input type="text" class="fi" id="wt-note" value="${esc(t.note||'')}" /></div>
+    <div class="fg"><label class="fl">Project</label>
+      <select class="fi" id="wt-project">${projOpts}</select></div>
+    <div class="fg"><label class="fl">Duration (min)</label>
+      <input type="number" class="fi" id="wt-dur" value="${t.duration||''}" min="1" max="480" /></div>
+    <div class="fg"><label class="fl">Pomodoro sessions</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">${pomPicks}</div></div>
+    <button class="submit-btn" onclick="saveWsEditTask('${id}')">Save changes</button>`;
+  document.getElementById('bs-bg').classList.add('open');
+  setTimeout(()=>document.getElementById('wt-name').focus(),120);
+}
+function saveWsEditTask(id) {
+  const t = (DB.workstation.tasks||[]).find(x=>x.id===id); if(!t) return;
+  const name = document.getElementById('wt-name').value.trim(); if(!name) return;
+  t.name = name;
+  t.note = document.getElementById('wt-note').value.trim();
+  t.projectId = document.getElementById('wt-project').value || null;
+  t.duration = parseInt(document.getElementById('wt-dur').value)||0;
+  const pomSel = document.querySelector('.pom-pick.sel');
+  t.pomSessions = pomSel ? parseInt(pomSel.dataset.n) : (t.pomSessions||4);
+  markUnsaved(); closeBS(); renderSection();
+}
+function wsToggleTask(id) {
+  const t = (DB.workstation.tasks||[]).find(x=>x.id===id); if(!t) return;
+  t.done = !t.done;
+  t.completedAt = t.done ? Date.now() : null;
+  markUnsaved(); renderSection();
+}
+function wsDeleteTask(id) {
+  if(!confirm('Delete this task?')) return;
+  DB.workstation.tasks = (DB.workstation.tasks||[]).filter(t=>t.id!==id);
+  markUnsaved(); renderSection();
+}
+function wsScheduleToday(id) {
+  const t = (DB.workstation.tasks||[]).find(x=>x.id===id); if(!t) return;
+  t.scheduledDate = currentDate;
+  markUnsaved(); renderSection();
+}
+function wsUnschedule(id) {
+  const t = (DB.workstation.tasks||[]).find(x=>x.id===id); if(!t) return;
+  t.scheduledDate = null;
+  markUnsaved(); renderSection();
+}
+function wsCarryToTomorrow(id) {
+  const t = (DB.workstation.tasks||[]).find(x=>x.id===id); if(!t) return;
+  const d = new Date(currentDate+'T12:00:00'); d.setDate(d.getDate()+1);
+  t.scheduledDate = d.toISOString().slice(0,10);
+  markUnsaved(); renderSection();
+}
+
+/* ── Today (daily plan) ─────────────────────────── */
+function renderWsToday(el) {
+  wsEnsure();
+  const all = DB.workstation.tasks||[];
+  const scheduled = all.filter(t=>t.scheduledDate===currentDate).sort((a,b)=>(a.done?1:0)-(b.done?1:0) || a.order-b.order);
+  const backlog = all.filter(t=>!t.done && (!t.scheduledDate || t.scheduledDate < currentDate));
+  const done = scheduled.filter(t=>t.done).length;
+  const pct = scheduled.length ? Math.round(done/scheduled.length*100) : 0;
+
+  let h = `<div class="s-head">
+    <div class="s-kicker">Workstation</div>
+    <div class="s-title">Today</div>
+    <div class="s-sub">Plan the day, then focus.</div>
+  </div>`;
+
+  if(scheduled.length) {
+    h += `<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;padding:12px 16px;background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow-sm)">
+      <div style="flex:1"><div style="height:5px;background:var(--cream);border-radius:3px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:${pct===100?'var(--green)':'var(--blue)'};border-radius:3px;transition:width 0.5s var(--ease)"></div>
+      </div></div>
+      <div style="font-size:12px;font-weight:500;color:${pct===100?'var(--green)':'var(--ink3)'};white-space:nowrap">${done}/${scheduled.length} done</div>
+    </div>`;
+  }
+
+  if(!scheduled.length) {
+    h += `<div class="ws-empty-hint">Nothing planned for today yet.<br>Tap ＋ to add a task, or pull one in from the backlog below.</div>`;
+  } else {
+    scheduled.forEach(t=>{
+      const p = t.projectId ? wsProject(t.projectId) : null;
+      const focusedSec = t.totalFocusSec||0;
+      const focusedMin = focusedSec>0 ? Math.round(focusedSec/60) : 0;
+      h += `<div class="task-row ${t.done?'done':''}" id="wtr-${t.id}">
+        <div class="task-cb ${t.done?'ticked':''}" onclick="wsToggleTask('${t.id}')">${t.done?'✓':''}</div>
+        <div class="task-info">
+          <div class="task-name">${p?`<span class="ws-tag" style="--proj-color:${p.color};background:color-mix(in srgb, ${p.color} 12%, transparent);color:${p.color}">${p.emoji} ${esc(p.name)}</span>`:''}${esc(t.name)}</div>
+          ${t.note?`<div class="task-note">${esc(t.note)}</div>`:''}
+          <div class="task-meta">${t.duration?`⏱ ${t.duration}min`:''}${focusedMin?` · 🍅 ${focusedMin}m focused`:''} · ${t.pomSessions||4} sessions</div>
+        </div>
+        ${!t.done?`<button class="task-focus-btn" onclick="openFocusMode('${t.id}','workstation')" title="Focus">🎯</button>`:''}
+        <button class="task-edit-btn" onclick="openWsEditTask('${t.id}')" title="Edit">✎</button>
+        <button class="task-del" onclick="wsDeleteTask('${t.id}')">✕</button>
+      </div>`;
+    });
+  }
+
+  if(backlog.length) {
+    h += `<div class="subsection-title" style="margin-top:24px">Backlog <span style="color:var(--text4);font-weight:400">· ${backlog.length} waiting</span></div>`;
+    backlog.forEach(t=>{
+      const p = t.projectId ? wsProject(t.projectId) : null;
+      h += `<div class="ws-backlog-item">
+        <span class="ws-bl-name">${p?`<span class="ws-tag" style="color:${p.color}">${p.emoji}</span>`:''}${esc(t.name)}</span>
+        <button class="ws-bl-add" onclick="wsScheduleToday('${t.id}')">+ Today</button>
+      </div>`;
+    });
+  }
+
+  el.innerHTML = h;
+}
+
+/* ── Projects list / detail ─────────────────────── */
+function renderWsProjects(el) {
+  wsEnsure();
+  if(currentWsProjectId) { renderWsProjectDetail(el); return; }
+  const projects = DB.workstation.projects||[];
+  let h = `<div class="s-head">
+    <div class="s-kicker">Workstation</div>
+    <div class="s-title">Projects</div>
+    <div class="s-sub">Everything you're working on.</div>
+  </div>`;
+  if(!projects.length) {
+    h += `<div class="ws-empty-hint">No projects yet.<br>Tap ＋ to create your first one.</div>`;
+  } else {
+    projects.forEach(p=>{
+      const prog = wsProjectProgress(p.id);
+      h += `<div class="ws-project-card" style="--proj-color:${p.color}" onclick="openWsProjectDetail('${p.id}')">
+        <div class="ws-project-emoji" style="--proj-color:${p.color}">${p.emoji}</div>
+        <div class="ws-project-info">
+          <div class="ws-project-name">${esc(p.name)}</div>
+          <div class="ws-project-meta">${prog.total ? `${prog.done}/${prog.total} tasks done` : 'No tasks yet'}</div>
+          ${prog.total?`<div class="ws-project-bar"><div class="ws-project-bar-fill" style="width:${prog.pct}%;--proj-color:${p.color}"></div></div>`:''}
+        </div>
+        <button class="ws-project-del" onclick="event.stopPropagation();deleteWsProject('${p.id}')">✕</button>
+      </div>`;
+    });
+  }
+  el.innerHTML = h;
+}
+function renderWsProjectDetail(el) {
+  const p = wsProject(currentWsProjectId);
+  if(!p) { currentWsProjectId=null; renderWsProjects(el); return; }
+  const tasks = wsTasksFor(p.id).sort((a,b)=>(a.done?1:0)-(b.done?1:0) || b.order-a.order);
+  let h = `<div class="s-head">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <button class="ws-carry-btn" onclick="wsBackToProjects()">‹ All projects</button>
+      <button class="ws-carry-btn" onclick="openWsEditProject('${p.id}')">✎ Edit</button>
+    </div>
+    <div class="s-kicker">${p.emoji} Project</div>
+    <div class="s-title">${esc(p.name)}</div>
+  </div>`;
+  h += `<button class="submit-btn" style="margin-bottom:16px" onclick="openWsAddTask(false)">＋ Add task to this project</button>`;
+  if(!tasks.length) {
+    h += `<div class="ws-empty-hint">No tasks in this project yet.</div>`;
+  } else {
+    tasks.forEach(t=>{
+      const focusedSec = t.totalFocusSec||0;
+      const focusedMin = focusedSec>0 ? Math.round(focusedSec/60) : 0;
+      h += `<div class="task-row ${t.done?'done':''}">
+        <div class="task-cb ${t.done?'ticked':''}" onclick="wsToggleTask('${t.id}')">${t.done?'✓':''}</div>
+        <div class="task-info">
+          <div class="task-name">${esc(t.name)}</div>
+          ${t.note?`<div class="task-note">${esc(t.note)}</div>`:''}
+          <div class="task-meta">${t.scheduledDate?`📅 ${t.scheduledDate}`:'Backlog'}${t.duration?` · ⏱ ${t.duration}min`:''}${focusedMin?` · 🍅 ${focusedMin}m focused`:''}</div>
+        </div>
+        ${!t.done?`<button class="task-focus-btn" onclick="openFocusMode('${t.id}','workstation')" title="Focus">🎯</button>`:''}
+        <button class="task-edit-btn" onclick="openWsEditTask('${t.id}')" title="Edit">✎</button>
+        <button class="task-del" onclick="wsDeleteTask('${t.id}')">✕</button>
+      </div>`;
+    });
+  }
+  el.innerHTML = h;
+  el.querySelector('.mf-btn')?.addEventListener('click', ()=>{});
+}
+
+/* ── Review (end-of-day shutdown) ───────────────── */
+function renderWsReview(el) {
+  wsEnsure();
+  const all = DB.workstation.tasks||[];
+  const todays = all.filter(t=>t.scheduledDate===currentDate);
+  const completed = todays.filter(t=>t.done);
+  const incomplete = todays.filter(t=>!t.done);
+  const review = DB.workstation.reviews[currentDate] || { text:'' };
+
+  let h = `<div class="s-head">
+    <div class="s-kicker">Workstation</div>
+    <div class="s-title">Review</div>
+    <div class="s-sub">Close the day with intention.</div>
+  </div>`;
+
+  h += `<div class="ws-review-stat"><span>Planned today</span><span class="ws-review-stat-num">${todays.length}</span></div>`;
+  h += `<div class="ws-review-stat"><span>Completed</span><span class="ws-review-stat-num" style="color:var(--green)">${completed.length}</span></div>`;
+  h += `<div class="ws-review-stat"><span>Left over</span><span class="ws-review-stat-num" style="color:var(--rust)">${incomplete.length}</span></div>`;
+
+  if(incomplete.length) {
+    h += `<div class="subsection-title" style="margin-top:20px">Didn't get to today</div>`;
+    incomplete.forEach(t=>{
+      h += `<div class="ws-backlog-item">
+        <span class="ws-bl-name">${esc(t.name)}</span>
+        <button class="ws-carry-btn" onclick="wsCarryToTomorrow('${t.id}')">→ Tomorrow</button>
+      </div>`;
+    });
+  }
+
+  h += `<div class="subsection-title" style="margin-top:20px">Reflection</div>
+  <div class="niyyah-banner">
+    <div class="niyyah-label">How did today go?</div>
+    <textarea class="niyyah-input" id="ws-review-text" rows="3" placeholder="What went well, what didn't…">${esc(review.text||'')}</textarea>
+  </div>`;
+
+  el.innerHTML = h;
+  el.querySelector('#ws-review-text').addEventListener('input', e=>{
+    if(!DB.workstation.reviews[currentDate]) DB.workstation.reviews[currentDate] = { text:'', createdAt:Date.now() };
+    DB.workstation.reviews[currentDate].text = e.target.value;
+    markUnsaved(true);
+  });
+}
+
+/* ════════════════════════════════════════════════
    SETTINGS
 ════════════════════════════════════════════════ */
 function openSettings() {
@@ -8534,6 +9029,14 @@ function openSettings() {
     : Notification.permission==='granted' && DB.profile.notifEnabled ? 'on'
     : Notification.permission==='denied' ? 'blocked' : 'off';
   document.getElementById('settings-content').innerHTML=`
+    <div class="s-section">
+      <div class="s-section-title">Mode</div>
+      <div class="theme-row" id="mode-seg">
+        <div class="th-btn mode-btn ${DB.appMode!=='workstation'?'sel':''}" data-m="lifeos" onclick="setAppMode('lifeos')">LifeOS</div>
+        <div class="th-btn mode-btn ${DB.appMode==='workstation'?'sel':''}" data-m="workstation" onclick="setAppMode('workstation')">Workstation</div>
+      </div>
+      <div style="font-size:11px;color:var(--ink4);margin-top:6px">Switches the whole app — Workstation is a separate space for projects and work tasks, kept apart from your LifeOS data.</div>
+    </div>
     <div class="s-section">
       <div class="s-section-title">Appearance</div>
       <div class="theme-row">
