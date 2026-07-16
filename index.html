@@ -859,17 +859,81 @@ body {
 .ws-timed-name { font-weight: 500; color: var(--text); }
 
 /* Week view */
-.ws-week-grid { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
-.ws-week-day { display: flex; align-items: center; gap: 12px; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 10px 14px; cursor: pointer; }
-.ws-week-day.is-today { border: 1.5px solid var(--blue); }
-.ws-week-day-label { width: 64px; flex-shrink: 0; }
-.ws-week-day-name { font-size: 12px; font-weight: 600; color: var(--text2); }
-.ws-week-day-date { font-size: 10.5px; color: var(--text4); }
-.ws-week-day-bar { flex: 1; height: 5px; background: var(--cream); border-radius: 3px; overflow: hidden; }
-.ws-week-day-bar-fill { height: 100%; background: var(--blue); border-radius: 3px; }
-.ws-week-day-count { font-size: 11.5px; color: var(--text3); white-space: nowrap; width: 56px; text-align: right; }
 .ws-week-stat-row { display: flex; gap: 10px; margin-bottom: 20px; }
 .ws-week-stat-row .ws-review-stat { flex: 1; flex-direction: column; align-items: flex-start; gap: 4px; }
+
+/* Calendar toolbar — prev/next, title, today shortcut, date jump */
+.ws-cal-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.ws-cal-nav-btn {
+  width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text2); display: flex; align-items: center;
+  justify-content: center; cursor: pointer; font-size: 14px; flex-shrink: 0; transition: all .2s;
+}
+.ws-cal-nav-btn:hover { border-color: var(--blue); color: var(--blue); }
+.ws-cal-title { flex: 1; min-width: 120px; font-family: var(--serif); font-size: 17px; font-weight: 600; color: var(--text); }
+.ws-cal-today-btn {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text2);
+  border-radius: 20px; padding: 6px 13px; font-size: 11px; font-weight: 600; cursor: pointer; flex-shrink: 0;
+}
+.ws-cal-today-btn:hover { border-color: var(--blue); color: var(--blue); }
+.ws-cal-jump { position: relative; flex-shrink: 0; }
+.ws-cal-jump-btn {
+  width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border);
+  background: var(--surface); display: flex; align-items: center; justify-content: center; font-size: 13px;
+}
+.ws-cal-jump input[type=date] { position: absolute; inset: 0; opacity: 0; cursor: pointer; border: none; }
+
+/* Month grid */
+.ws-month-weekdays { display: grid; grid-template-columns: repeat(7,1fr); gap: 4px; margin-bottom: 6px; }
+.ws-month-weekdays span { text-align: center; font-size: 10px; font-weight: 700; color: var(--text4); text-transform: uppercase; letter-spacing: .4px; }
+.ws-month-grid { display: grid; grid-template-columns: repeat(7,1fr); gap: 4px; margin-bottom: 16px; }
+.ws-month-cell {
+  min-height: 62px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border);
+  padding: 5px 4px 6px; cursor: pointer; display: flex; flex-direction: column; gap: 3px;
+  transition: box-shadow .2s, border-color .2s; position: relative;
+}
+.ws-month-cell:hover { box-shadow: var(--shadow-sm); border-color: var(--border2); }
+.ws-month-cell.other-month { opacity: .32; }
+.ws-month-cell.is-today { border-color: var(--blue); border-width: 1.5px; }
+.ws-month-daynum { font-size: 11px; font-weight: 600; color: var(--text2); }
+.ws-month-cell.is-today .ws-month-daynum {
+  background: var(--blue); color: #fff; width: 18px; height: 18px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+}
+.ws-month-dots { display: flex; flex-wrap: wrap; align-items: center; gap: 2.5px; margin-top: auto; }
+.ws-month-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dot-color, var(--blue)); flex-shrink: 0; }
+.ws-month-more { font-size: 8.5px; color: var(--text4); font-weight: 700; }
+.ws-month-overdue-mark { position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--rust); }
+.ws-month-legend { display: flex; flex-wrap: wrap; gap: 10px 14px; margin-bottom: 20px; }
+.ws-month-legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text3); }
+.ws-month-legend-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+/* Week — calendar-style agenda grid (replaces the old bar-chart week list) */
+.ws-cal-week { display: grid; grid-template-columns: repeat(7,1fr); gap: 5px; margin-bottom: 18px; }
+.ws-cal-week-day {
+  background: var(--surface); border-radius: var(--radius-sm); border: 1px solid var(--border);
+  padding: 7px 5px; min-height: 110px; cursor: pointer; display: flex; flex-direction: column; gap: 4px;
+}
+.ws-cal-week-day.is-today { border-color: var(--blue); border-width: 1.5px; }
+.ws-cal-week-day-head { display: flex; flex-direction: column; align-items: center; margin-bottom: 2px; }
+.ws-cal-week-day-name { font-size: 9px; font-weight: 700; color: var(--text4); text-transform: uppercase; letter-spacing: .3px; }
+.ws-cal-week-day-num { font-size: 13px; font-weight: 600; color: var(--text); font-family: var(--serif); }
+.ws-cal-week-day.is-today .ws-cal-week-day-num {
+  background: var(--blue); color: #fff; width: 20px; height: 20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; margin: 0 auto;
+}
+.ws-cal-chip {
+  font-size: 9.5px; padding: 3px 5px; border-radius: 6px; line-height: 1.3;
+  background: color-mix(in srgb, var(--chip-color, var(--blue)) 14%, var(--surface));
+  border-left: 2.5px solid var(--chip-color, var(--blue)); cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ws-cal-chip.done { opacity: .45; text-decoration: line-through; }
+.ws-cal-week-day-empty { font-size: 10px; color: var(--text4); text-align: center; margin-top: 6px; }
+
+/* Timeline "now" line */
+.ws-timeline-now { position: absolute; left: 0; right: 0; height: 0; border-top: 2px solid var(--rust); z-index: 5; pointer-events: none; }
+.ws-timeline-now::before { content: ''; position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; border-radius: 50%; background: var(--rust); }
 
 /* Archive */
 .ws-archive-toggle { font-size: 11.5px; color: var(--text3); text-align: right; margin-bottom: 10px; cursor: pointer; text-decoration: underline; }
@@ -4119,7 +4183,7 @@ function focusSaveTime() {
     const t = (DB.workstation.tasks||[]).find(x=>x.id===focusState.taskId);
     if(t) {
       if(!t.focusTime) t.focusTime = {};
-      t.focusTime[focusState.taskId] = (t.focusTime[focusState.taskId]||0) + focusState.elapsed;
+      t.focusTime[currentDate] = (t.focusTime[currentDate]||0) + focusState.elapsed;
       t.totalFocusSec = (t.totalFocusSec||0) + focusState.elapsed;
     }
   } else {
@@ -8759,7 +8823,12 @@ function wsIsRecurringDueOn(t, dateStr) {
   if(!t.repeat) return false;
   if(t.repeat==='daily') return true;
   if(t.repeat==='weekly') {
-    const anchor = t.scheduledDate || dateStr;
+    // Need a STABLE anchor day to compare weekdays against. Falling back to
+    // dateStr itself (the day being tested) made every unscheduled weekly
+    // task compare equal to itself and fire daily. Fall back to createdAt
+    // instead; if we truly have nothing stable, don't guess — skip it.
+    const anchor = t.scheduledDate || (t.createdAt ? new Date(t.createdAt).toISOString().slice(0,10) : null);
+    if(!anchor) return false;
     return wsWeekday(anchor) === wsWeekday(dateStr);
   }
   return false;
@@ -8768,18 +8837,19 @@ function wsIsDoneOn(t, dateStr) {
   if(t.repeat) return (t.repeatDoneDates||[]).includes(dateStr);
   return !!t.done;
 }
-function wsToggleTask(id) {
+function wsToggleTaskOn(id, dateStr) {
   const t = (DB.workstation.tasks||[]).find(x=>x.id===id); if(!t) return;
   if(t.repeat) {
     if(!t.repeatDoneDates) t.repeatDoneDates=[];
-    const idx = t.repeatDoneDates.indexOf(currentDate);
-    if(idx>=0) t.repeatDoneDates.splice(idx,1); else t.repeatDoneDates.push(currentDate);
+    const idx = t.repeatDoneDates.indexOf(dateStr);
+    if(idx>=0) t.repeatDoneDates.splice(idx,1); else t.repeatDoneDates.push(dateStr);
   } else {
     t.done = !t.done;
     t.completedAt = t.done ? Date.now() : null;
   }
   markUnsaved(); renderSection();
 }
+function wsToggleTask(id) { wsToggleTaskOn(id, currentDate); }
 function wsSetTaskProject(id, projectId) {
   const t = (DB.workstation.tasks||[]).find(x=>x.id===id); if(!t) return;
   t.projectId = projectId || null;
@@ -8788,7 +8858,7 @@ function wsSetTaskProject(id, projectId) {
 function wsMoveTask(id, dir) {
   const scheduled = (DB.workstation.tasks||[])
     .filter(t=>t.scheduledDate===currentDate || wsIsRecurringDueOn(t,currentDate))
-    .sort((a,b)=>(a.order||0)-(b.order||0));
+    .sort((a,b)=>(wsIsDoneOn(a,currentDate)?1:0)-(wsIsDoneOn(b,currentDate)?1:0) || (a.order||0)-(b.order||0));
   const idx = scheduled.findIndex(t=>t.id===id);
   const swapIdx = idx + dir;
   if(idx<0 || swapIdx<0 || swapIdx>=scheduled.length) return;
@@ -8826,7 +8896,7 @@ function formatTimeLabel(hhmm) {
 function openWsAddProject() {
   wsEnsure();
   const emojiGrid=EMOJIS.map((e,i)=>`<div class="eg-opt ${i===0?'sel':''}" onclick="selEmoji(this)">${e}</div>`).join('');
-  const colGrid=COLORS.map((c,i)=>`<div class="cg-swatch ${i===0?'sel':''}" style="background:${c}" data-c="${c}" onclick="selColor(this)"></div>`).join('');
+  const colGrid=WS_PROJECT_COLORS.map((c,i)=>`<div class="cg-swatch ${i===0?'sel':''}" style="background:${c}" data-c="${c}" onclick="selColor(this)"></div>`).join('');
   document.getElementById('modal-content').innerHTML=`
     <div class="modal-title">New project</div>
     <div class="fg"><label class="fl">Name</label><input type="text" class="fi" id="wp-name" placeholder="Website redesign…" /></div>
@@ -8841,7 +8911,7 @@ function openWsAddProject() {
 function submitWsProject() {
   const name = document.getElementById('wp-name').value.trim(); if(!name) return;
   const emoji = document.querySelector('.eg-opt.sel')?.textContent||'▣';
-  const color = document.querySelector('.cg-swatch.sel')?.dataset.c||COLORS[0];
+  const color = document.querySelector('.cg-swatch.sel')?.dataset.c||WS_PROJECT_COLORS[0];
   wsEnsure();
   DB.workstation.projects.push({id:genId(),name,emoji,color,archived:false,createdAt:Date.now()});
   markUnsaved(); closeModal(); renderSection();
@@ -8849,7 +8919,7 @@ function submitWsProject() {
 function openWsEditProject(id) {
   const p = wsProject(id); if(!p) return;
   const emojiGrid=EMOJIS.map(e=>`<div class="eg-opt ${e===p.emoji?'sel':''}" onclick="selEmoji(this)">${e}</div>`).join('');
-  const colGrid=COLORS.map(c=>`<div class="cg-swatch ${c===p.color?'sel':''}" style="background:${c}" data-c="${c}" onclick="selColor(this)"></div>`).join('');
+  const colGrid=WS_PROJECT_COLORS.map(c=>`<div class="cg-swatch ${c===p.color?'sel':''}" style="background:${c}" data-c="${c}" onclick="selColor(this)"></div>`).join('');
   document.getElementById('modal-content').innerHTML=`
     <div class="modal-title">Edit project</div>
     <div class="fg"><label class="fl">Name</label><input type="text" class="fi" id="wp-name" value="${esc(p.name)}" /></div>
@@ -8884,6 +8954,7 @@ function openWsAddTask(scheduleToday) {
   wsEnsure();
   const projOpts = `<option value="">No project</option>` +
     DB.workstation.projects.filter(p=>!p.archived).map(p=>`<option value="${p.id}" ${currentWsProjectId===p.id?'selected':''}>${p.emoji} ${esc(p.name)}</option>`).join('');
+  const schedLabel = wsDateLabel(currentDate);
   document.getElementById('bs-content').innerHTML=`
     <div class="bs-title">New task</div>
     <div class="fg"><label class="fl">Task</label>
@@ -8911,7 +8982,7 @@ function openWsAddTask(scheduleToday) {
         ${[1,2,3,4,5,6,7,8].map(n=>`<div class="pom-pick ${n===4?'sel':''}" data-n="${n}" onclick="selPomSessions(this)">${n}</div>`).join('')}
       </div></div>
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);margin:4px 0 14px">
-      <input type="checkbox" id="wt-today" ${scheduleToday!==false?'checked':''} style="width:16px;height:16px" /> Schedule for today
+      <input type="checkbox" id="wt-today" ${scheduleToday!==false?'checked':''} style="width:16px;height:16px" /> Schedule for ${schedLabel==='Today'?'today':schedLabel}
     </label>
     <button class="submit-btn" onclick="submitWsTask()">Add task</button>`;
   document.getElementById('bs-bg').classList.add('open');
@@ -8976,7 +9047,7 @@ function saveWsEditTask(id) {
   t.name = name;
   t.note = document.getElementById('wt-note').value.trim();
   t.projectId = document.getElementById('wt-project').value || null;
-  t.duration = parseInt(document.getElementById('wt-dur').value)||0;
+  t.duration = parseInt(document.getElementById('wt-dur').value)||undefined;
   t.startTime = document.getElementById('wt-time').value || null;
   t.dueDate = document.getElementById('wt-due').value || null;
   t.repeat = document.getElementById('wt-repeat').value || null;
@@ -9007,22 +9078,70 @@ function wsCarryToTomorrow(id) {
   markUnsaved(); renderSection();
 }
 
-/* ── Today (daily plan) ─────────────────────────── */
+/* ── Calendar toolbar (shared by Day/Week/Month) ── */
+function wsDateLabel(ds) {
+  const today = todayStr();
+  if(ds===today) return 'Today';
+  const t = new Date(today+'T12:00:00'); t.setDate(t.getDate()+1);
+  if(ds===t.toISOString().slice(0,10)) return 'Tomorrow';
+  const y = new Date(today+'T12:00:00'); y.setDate(y.getDate()-1);
+  if(ds===y.toISOString().slice(0,10)) return 'Yesterday';
+  return new Date(ds+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
+}
+function wsGoToday() {
+  currentDate = todayStr();
+  renderHero(); renderSection(true);
+}
+function wsJumpToDate(v) {
+  if(!v) return;
+  currentDate = v; wsTodayView = 'day';
+  renderHero(); renderSection(true);
+}
+function wsCalNav(dir) {
+  const d = new Date(currentDate+'T12:00:00');
+  if(wsTodayView==='month') d.setMonth(d.getMonth()+dir, 1);
+  else if(wsTodayView==='week') d.setDate(d.getDate()+dir*7);
+  else d.setDate(d.getDate()+dir);
+  currentDate = d.toISOString().slice(0,10);
+  renderHero(); renderSection(true);
+}
+function wsCalToolbarHtml(title) {
+  return `<div class="ws-cal-toolbar">
+    <button class="ws-cal-nav-btn" onclick="wsCalNav(-1)" title="Previous">‹</button>
+    <div class="ws-cal-title">${title}</div>
+    <button class="ws-cal-nav-btn" onclick="wsCalNav(1)" title="Next">›</button>
+    <button class="ws-cal-today-btn" onclick="wsGoToday()">Today</button>
+    <div class="ws-cal-jump" title="Jump to date">
+      <span class="ws-cal-jump-btn">📅</span>
+      <input type="date" value="${currentDate}" onchange="wsJumpToDate(this.value)" />
+    </div>
+  </div>`;
+}
+
+/* ── Calendar (Day / Week / Month) ───────────────── */
 function renderWsToday(el) {
   wsEnsure();
-  const viewToggle = `<div class="theme-row" style="margin-bottom:18px">
+  const viewToggle = `<div class="theme-row" style="margin-bottom:14px">
     <div class="th-btn ${wsTodayView==='day'?'sel':''}" onclick="wsSetTodayView('day')">Day</div>
     <div class="th-btn ${wsTodayView==='week'?'sel':''}" onclick="wsSetTodayView('week')">Week</div>
+    <div class="th-btn ${wsTodayView==='month'?'sel':''}" onclick="wsSetTodayView('month')">Month</div>
   </div>`;
 
   let h = `<div class="s-head">
     <div class="s-kicker">Workstation</div>
-    <div class="s-title">${wsTodayView==='week'?'Week':'Today'}</div>
-    <div class="s-sub">${wsTodayView==='week'?'See the whole week at a glance.':'Plan the day, then focus.'}</div>
+    <div class="s-title">Calendar</div>
+    <div class="s-sub">Plan the day, then focus.</div>
   </div>`;
   h += viewToggle;
 
-  if(wsTodayView==='week') { h += wsWeekHtml(); el.innerHTML = h; return; }
+  if(wsTodayView==='month') { h += wsMonthHtml(); el.innerHTML = h; return; }
+  if(wsTodayView==='week')  { h += wsWeekHtml();  el.innerHTML = h; return; }
+
+  // ── Day view ──
+  const anchor = new Date(currentDate+'T12:00:00');
+  const dayLabel = wsDateLabel(currentDate);
+  const dayTitle = anchor.toLocaleDateString('en-US',{weekday:'long', month:'long', day:'numeric'});
+  h += wsCalToolbarHtml(dayTitle + (dayLabel==='Today' ? ' · Today' : ''));
 
   const all = DB.workstation.tasks||[];
   const scheduled = all.filter(t => t.scheduledDate===currentDate || wsIsRecurringDueOn(t,currentDate))
@@ -9042,14 +9161,14 @@ function renderWsToday(el) {
   }
 
   if(totalMin > WS_CAPACITY_MIN) {
-    h += `<div class="ws-capacity-warn">⚠ You've planned ${(totalMin/60).toFixed(1)}h today — that's more than a typical 8h day. Consider moving something to the backlog.</div>`;
+    h += `<div class="ws-capacity-warn">⚠ You've planned ${(totalMin/60).toFixed(1)}h for ${dayLabel==='Today'?'today':dayLabel} — that's more than a typical 8h day. Consider moving something to the backlog.</div>`;
   }
 
   const timedTasks = scheduled.filter(t=>t.startTime);
   if(timedTasks.length) h += wsTimelineHtml(timedTasks);
 
   if(!scheduled.length) {
-    h += `<div class="ws-empty-hint">Nothing planned for today yet.<br>Tap ＋ to add a task, or pull one in from the backlog below.</div>`;
+    h += `<div class="ws-empty-hint">Nothing planned for ${dayLabel==='Today'?'today':dayLabel} yet.<br>Tap ＋ to add a task, or pull one in from the backlog below.</div>`;
   } else {
     const projOptsFor = (t) => `<option value="">No project</option>` +
       DB.workstation.projects.filter(p=>!p.archived||p.id===t.projectId).map(p=>`<option value="${p.id}" ${t.projectId===p.id?'selected':''}>${p.emoji} ${esc(p.name)}</option>`).join('');
@@ -9071,6 +9190,7 @@ function renderWsToday(el) {
           <select class="ws-inline-proj" onchange="wsSetTaskProject('${t.id}',this.value)">${projOptsFor(t)}</select>
         </div>
         ${!isDone?`<button class="task-focus-btn" onclick="openFocusMode('${t.id}','workstation')" title="Focus">🎯</button>`:''}
+        ${!t.repeat?`<button class="task-edit-btn" onclick="wsUnschedule('${t.id}')" title="Move to backlog">↩</button>`:''}
         <button class="task-edit-btn" onclick="openWsEditTask('${t.id}')" title="Edit">✎</button>
         <button class="task-del" onclick="wsDeleteTask('${t.id}')">✕</button>
       </div>`;
@@ -9083,7 +9203,7 @@ function renderWsToday(el) {
       const p = t.projectId ? wsProject(t.projectId) : null;
       h += `<div class="ws-backlog-item">
         <span class="ws-bl-name">${p?`<span class="ws-tag" style="color:${p.color}">${p.emoji}</span>`:''}${esc(t.name)}${wsDueBadge(t)}</span>
-        <button class="ws-bl-add" onclick="wsScheduleToday('${t.id}')">+ Today</button>
+        <button class="ws-bl-add" onclick="wsScheduleToday('${t.id}')">+ ${dayLabel}</button>
       </div>`;
     });
   }
@@ -9106,57 +9226,107 @@ async function wsLoadCalendarEvents(dateStr) {
     }).join('');
 }
 
-/* Timeline (time-blocking view) for tasks with a startTime set */
+/* Timeline (time-blocking view) for tasks with a startTime set.
+   Overlapping tasks get laid out in side-by-side lanes instead of stacking
+   on top of each other, and a live "now" line shows when viewing today. */
 function wsTimelineHtml(timedTasks) {
   let hoursHtml = '';
   for(let m=WS_DAY_START_MIN, hr=Math.floor(WS_DAY_START_MIN/60); m<=WS_DAY_END_MIN; m+=60, hr++) {
     const label = hr===0?'12 AM':hr<12?`${hr} AM`:hr===12?'12 PM':`${hr-12} PM`;
     hoursHtml += `<div class="ws-hour-row" style="top:${m-WS_DAY_START_MIN}px"><span class="ws-hour-label">${label}</span></div>`;
   }
-  const blocksHtml = timedTasks.map(t=>{
+
+  const blocks = timedTasks.map(t=>{
     const [hh,mm] = t.startTime.split(':').map(Number);
     const startMin = hh*60+mm;
     const top = Math.max(0, startMin - WS_DAY_START_MIN);
     const height = Math.max(26, t.duration||30);
+    return { t, top, height, end: top+height, lane: 0, totalLanes: 1 };
+  }).sort((a,b)=>a.top-b.top);
+
+  const laneEnds = []; // end position of the last block placed in each lane
+  blocks.forEach(b=>{
+    let lane = laneEnds.findIndex(end=>b.top >= end);
+    if(lane===-1) { lane = laneEnds.length; laneEnds.push(b.end); }
+    else laneEnds[lane] = b.end;
+    b.lane = lane;
+  });
+  blocks.forEach(b=>{
+    const overlapping = blocks.filter(o=>o.top < b.end && o.end > b.top);
+    b.totalLanes = Math.max(...overlapping.map(o=>o.lane)) + 1;
+  });
+
+  const now = new Date();
+  const nowMin = now.getHours()*60 + now.getMinutes();
+  const showNow = currentDate===todayStr() && nowMin>=WS_DAY_START_MIN && nowMin<=WS_DAY_END_MIN;
+
+  const blocksHtml = blocks.map(b=>{
+    const t = b.t;
     const p = t.projectId ? wsProject(t.projectId) : null;
     const isDone = wsIsDoneOn(t,currentDate);
-    return `<div class="ws-timed-block ${isDone?'done':''}" style="top:${top}px;height:${height}px;--proj-color:${p?p.color:'#284868'}" onclick="openWsEditTask('${t.id}')">
+    const widthPct = 100 / b.totalLanes;
+    const leftPct = widthPct * b.lane;
+    return `<div class="ws-timed-block ${isDone?'done':''}" style="top:${b.top}px;height:${b.height}px;left:calc(${leftPct}% + 6px);width:calc(${widthPct}% - 10px);--proj-color:${p?p.color:'#284868'}" onclick="openWsEditTask('${t.id}')">
       <div class="ws-timed-time">${formatTimeLabel(t.startTime)}</div>
       <div class="ws-timed-name">${esc(t.name)}</div>
     </div>`;
   }).join('');
+
+  const nowLine = showNow ? `<div class="ws-timeline-now" style="top:${nowMin-WS_DAY_START_MIN}px"></div>` : '';
   const trackHeight = WS_DAY_END_MIN - WS_DAY_START_MIN;
   return `<div class="ws-timeline-wrap" style="height:${trackHeight}px;overflow-y:auto">
     <div class="ws-timeline-hours" style="height:${trackHeight}px">${hoursHtml}</div>
-    <div class="ws-timeline-track" style="height:${trackHeight}px">${blocksHtml}</div>
+    <div class="ws-timeline-track" style="height:${trackHeight}px">${blocksHtml}${nowLine}</div>
   </div>`;
 }
 
-/* Week view + weekly review stats */
+/* Week — calendar-style agenda grid (7 day columns, task chips, tap to
+   toggle done right from the grid) plus the weekly completion stats. */
 function wsWeekHtml() {
   const anchor = new Date(currentDate+'T12:00:00');
   const dow = anchor.getDay(); // 0=Sun
   const mondayOffset = dow===0 ? -6 : 1-dow;
   const monday = new Date(anchor); monday.setDate(anchor.getDate()+mondayOffset);
+  const sunday = new Date(monday); sunday.setDate(monday.getDate()+6);
   const dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   const all = DB.workstation.tasks||[];
+  const today = todayStr();
   let totalPlanned=0, totalDone=0, totalFocusSec=0, busiestDay=null, busiestCount=-1;
 
-  let rows='';
+  const rangeLabel = monday.getMonth()===sunday.getMonth()
+    ? `${monday.toLocaleDateString('en-US',{month:'long'})} ${monday.getDate()}–${sunday.getDate()}`
+    : `${monday.toLocaleDateString('en-US',{month:'short',day:'numeric'})} – ${sunday.toLocaleDateString('en-US',{month:'short',day:'numeric'})}`;
+
+  let cols = '';
   for(let i=0;i<7;i++) {
     const d = new Date(monday); d.setDate(monday.getDate()+i);
     const ds = d.toISOString().slice(0,10);
-    const dayTasks = all.filter(t=>t.scheduledDate===ds || wsIsRecurringDueOn(t,ds));
+    const dayTasks = all.filter(t=>t.scheduledDate===ds || wsIsRecurringDueOn(t,ds))
+      .sort((a,b)=>(a.startTime||'99:99').localeCompare(b.startTime||'99:99'));
     const doneCount = dayTasks.filter(t=>wsIsDoneOn(t,ds)).length;
-    const pct = dayTasks.length ? Math.round(doneCount/dayTasks.length*100) : 0;
     totalPlanned += dayTasks.length; totalDone += doneCount;
-    dayTasks.forEach(t=>{ if(!t.repeat && t.scheduledDate===ds) totalFocusSec += (t.totalFocusSec||0); });
+    dayTasks.forEach(t=>{
+      const perDay = t.focusTime && t.focusTime[ds];
+      if(perDay) totalFocusSec += perDay;
+      else if(!t.repeat && t.scheduledDate===ds) totalFocusSec += (t.totalFocusSec||0); // legacy fallback
+    });
     if(dayTasks.length > busiestCount) { busiestCount = dayTasks.length; busiestDay = dayNames[i]; }
-    const isToday = ds===todayStr();
-    rows += `<div class="ws-week-day ${isToday?'is-today':''}" onclick="wsJumpToDay('${ds}')">
-      <div class="ws-week-day-label"><div class="ws-week-day-name">${dayNames[i]}</div><div class="ws-week-day-date">${d.getDate()} ${d.toLocaleDateString('en-US',{month:'short'})}</div></div>
-      <div class="ws-week-day-bar"><div class="ws-week-day-bar-fill" style="width:${pct}%"></div></div>
-      <div class="ws-week-day-count">${doneCount}/${dayTasks.length}</div>
+    const isToday = ds===today;
+
+    const chips = dayTasks.slice(0,5).map(t=>{
+      const p = t.projectId ? wsProject(t.projectId) : null;
+      const isDone = wsIsDoneOn(t,ds);
+      return `<div class="ws-cal-chip ${isDone?'done':''}" style="--chip-color:${p?p.color:'var(--blue)'}"
+        onclick="event.stopPropagation();wsToggleTaskOn('${t.id}','${ds}')" title="${esc(t.name)} — tap to mark done">${t.startTime?`${formatTimeLabel(t.startTime)} · `:''}${esc(t.name)}</div>`;
+    }).join('');
+    const more = dayTasks.length>5 ? `<div class="ws-cal-chip" style="--chip-color:var(--text4);opacity:.7">+${dayTasks.length-5} more</div>` : '';
+
+    cols += `<div class="ws-cal-week-day ${isToday?'is-today':''}" onclick="wsJumpToDay('${ds}')">
+      <div class="ws-cal-week-day-head">
+        <div class="ws-cal-week-day-name">${dayNames[i]}</div>
+        <div class="ws-cal-week-day-num">${d.getDate()}</div>
+      </div>
+      ${dayTasks.length ? chips+more : '<div class="ws-cal-week-day-empty">—</div>'}
     </div>`;
   }
 
@@ -9166,8 +9336,55 @@ function wsWeekHtml() {
     <div class="ws-review-stat"><span style="font-size:11px;color:var(--text3)">Busiest day</span><span class="ws-review-stat-num" style="font-size:16px">${busiestCount>0?busiestDay:'—'}</span></div>
   </div>`;
 
-  return `<div class="ws-week-grid">${rows}</div>${stats}`;
+  return `${wsCalToolbarHtml(rangeLabel)}<div class="ws-cal-week">${cols}</div>${stats}`;
 }
+
+/* Month — full calendar grid. Each cell shows the date, a colored dot per
+   task (matching its project color), an overdue marker, and jumps to that
+   day's Day view on click. A legend lists which color maps to which project. */
+function wsMonthHtml() {
+  const anchor = new Date(currentDate+'T12:00:00');
+  const year = anchor.getFullYear(), month = anchor.getMonth();
+  const firstOfMonth = new Date(year, month, 1);
+  const startDow = firstOfMonth.getDay(); // 0=Sun
+  const leadDays = startDow===0 ? 6 : startDow-1; // back up to the Monday on/before the 1st
+  const gridStart = new Date(year, month, 1 - leadDays);
+  const monthLabel = firstOfMonth.toLocaleDateString('en-US',{month:'long', year:'numeric'});
+  const today = todayStr();
+  const all = DB.workstation.tasks||[];
+  const dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+  let cells = '';
+  const usedProjectIds = new Set();
+  for(let i=0;i<42;i++) {
+    const d = new Date(gridStart); d.setDate(gridStart.getDate()+i);
+    const ds = d.toISOString().slice(0,10);
+    const inMonth = d.getMonth()===month;
+    const dayTasks = all.filter(t=>t.scheduledDate===ds || wsIsRecurringDueOn(t,ds));
+    const hasOverdue = dayTasks.some(t=>!wsIsDoneOn(t,ds) && ds<today);
+    const dots = dayTasks.slice(0,4).map(t=>{
+      const p = t.projectId ? wsProject(t.projectId) : null;
+      if(p) usedProjectIds.add(p.id);
+      return `<span class="ws-month-dot" style="--dot-color:${p?p.color:'var(--text4)'}"></span>`;
+    }).join('');
+    const more = dayTasks.length>4 ? `<span class="ws-month-more">+${dayTasks.length-4}</span>` : '';
+    cells += `<div class="ws-month-cell ${inMonth?'':'other-month'} ${ds===today?'is-today':''}" onclick="wsJumpToDay('${ds}')">
+      ${hasOverdue?'<span class="ws-month-overdue-mark" title="Overdue task"></span>':''}
+      <span class="ws-month-daynum">${d.getDate()}</span>
+      <div class="ws-month-dots">${dots}${more}</div>
+    </div>`;
+  }
+
+  const legend = DB.workstation.projects.filter(p=>usedProjectIds.has(p.id)).map(p=>
+    `<span class="ws-month-legend-item"><span class="ws-month-legend-dot" style="background:${p.color}"></span>${p.emoji} ${esc(p.name)}</span>`
+  ).join('');
+
+  return `${wsCalToolbarHtml(monthLabel)}
+    <div class="ws-month-weekdays">${dayNames.map(d=>`<span>${d}</span>`).join('')}</div>
+    <div class="ws-month-grid">${cells}</div>
+    ${legend?`<div class="ws-month-legend">${legend}</div>`:''}`;
+}
+
 function wsJumpToDay(dateStr) {
   currentDate = dateStr; wsTodayView='day';
   renderHero(); renderSection(true);
@@ -9209,7 +9426,7 @@ function renderWsProjects(el) {
 function renderWsProjectDetail(el) {
   const p = wsProject(currentWsProjectId);
   if(!p) { currentWsProjectId=null; renderWsProjects(el); return; }
-  const tasks = wsTasksFor(p.id).sort((a,b)=>(a.done?1:0)-(b.done?1:0) || b.order-a.order);
+  const tasks = wsTasksFor(p.id).sort((a,b)=>(a.done?1:0)-(b.done?1:0) || (a.order||0)-(b.order||0));
   let h = `<div class="s-head">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
       <button class="ws-carry-btn" onclick="wsBackToProjects()">‹ All projects</button>
@@ -10184,62 +10401,6 @@ function aiBuildWorkstationContext() {
 }
 
 // ── Build the system prompt ──
-function aiBuildSystemPrompt() {
-  return `You are a data assistant for SaadOs, an Islamic personal productivity app. The user gives you a command and you return a JSON patch to update the database.
-
-CRITICAL OUTPUT RULES:
-1. Return ONLY raw JSON — no markdown, no backticks, no explanation, no preamble, nothing else.
-2. Only include fields that CHANGE. Never copy back read-only context data.
-3. Allowed top-level keys: "days", "mal", "wird", "practices", "profile". Nothing else.
-
-════ FULL ALLOWED WRITE SCHEMA ════
-
-days.[YYYY-MM-DD]:
-  niyyah: string
-  prayers.[fajr|dhuhr|asr|maghrib|isha]:
-    location: "mosque" | "home" | "not_yet"
-    timing: "on_time" | "late" | "not_yet"
-  nawafil: full array of { id, name, location, timing, addedAt }
-  tasks: full array of { id, name, block, note, duration, pomSessions, done, createdAt }
-    block must be one of: fajr | dhuhr | asr | maghrib | isha
-  journal:
-    text: string (preserve Arabic, fix spelling only if asked)
-    tags: array of strings
-    images: full array of { driveId, name } (for deletions only)
-  wirdCounts: { [wirdId]: number } — increment/decrement wird counts
-  practicesDone: { [practiceId]: true|false } — mark practices done/undone
-
-mal:
-  budget: number
-  expenses: array of NEW items only: { id: "exp_"+random, amount: number, desc: string, date: ISO string }
-
-wird: full array of { id, ar, en, target } — for adding/editing/deleting wird items
-  WARNING: this replaces the whole wird list. Always include ALL existing items + your change.
-
-practices: full array of { id, name, ar, category, emoji, color } — for adding/editing/deleting practices
-  category must be one of: ibadah | ilm | jism | ruh | dunya
-  WARNING: this replaces the whole practices list. Always include ALL existing items + your change.
-
-profile:
-  name: string
-  theme: "light" | "dark" | "sepia"
-  fontSize: "small" | "medium" | "large"
-  timezone: string (e.g. "Africa/Casablanca")
-
-════ SAFETY RULES ════
-- NEVER set any value to null
-- NEVER omit existing items when replacing wird or practices arrays
-- NEVER touch journal.images unless user explicitly asks to delete an image
-- NEVER invent practiceIds or wirdIds — use IDs from the context data
-- For expenses: only APPEND new items, never rewrite the whole array
-- For wirdCounts: only include the specific wird being changed
-- For practicesDone: only include the specific practice being changed
-- If you cannot understand: return {"error": "Could not understand"}
-
-TODAY: ${todayStr()}
-CURRENT TIME: ${new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'})}`;
-}
-
 // ── Call Groq with fallback models ──
 async function aiCallGroq(systemPrompt, userMessage, maxTokens = 1000) {
   const models = [
@@ -10437,12 +10598,26 @@ function aiApplyPatch(patch) {
       }
     }
     if (ws.taskUpdates) {
-      const allowedFields = ['name','note','projectId','duration','startTime','dueDate','repeat','done','scheduledDate'];
+      const allowedFields = ['name','note','projectId','duration','startTime','dueDate','repeat','scheduledDate'];
+      const today = todayStr();
       for (const [tid, upd] of Object.entries(ws.taskUpdates)) {
         const t = DB.workstation.tasks.find(x => x.id === tid);
         if (!t) continue;
         for (const k of allowedFields) if (upd[k] !== undefined) t[k] = upd[k];
-        if (upd.done !== undefined) t.completedAt = upd.done ? Date.now() : null;
+        if (upd.done !== undefined) {
+          // Recurring tasks track completion per-day via repeatDoneDates, not
+          // a single `done` flag — wsIsDoneOn() ignores `.done` entirely once
+          // `.repeat` is set, so writing t.done here would silently no-op.
+          if (t.repeat) {
+            if (!t.repeatDoneDates) t.repeatDoneDates = [];
+            const idx = t.repeatDoneDates.indexOf(today);
+            if (upd.done && idx < 0) t.repeatDoneDates.push(today);
+            if (!upd.done && idx >= 0) t.repeatDoneDates.splice(idx, 1);
+          } else {
+            t.done = upd.done;
+            t.completedAt = upd.done ? Date.now() : null;
+          }
+        }
       }
     }
     if (ws.deleteTaskIds) {
