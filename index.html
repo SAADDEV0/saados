@@ -765,6 +765,11 @@ body {
   --nav-active-bg: var(--blue);
   --nav-active-text: #f0ece4;
 }
+/* Workstation is a fully separate space with no AI assistant — the corner
+   launcher (and its chat window, if it was left open in LifeOS) are hidden
+   the moment the app switches into Workstation mode. */
+[data-mode="workstation"] #ai-corner-btn,
+[data-mode="workstation"] #ai-chat-window { display: none !important; }
 [data-mode="workstation"] #fab { background: var(--blue); }
 [data-mode="workstation"] #fab:hover { background: #34597e; }
 [data-mode="workstation"] .hero-today-pill { background: var(--blue-bg); color: var(--blue); }
@@ -4407,6 +4412,7 @@ function setAppMode(mode) {
   document.body.setAttribute('data-mode', mode);
   currentSection = 'niyyah';
   currentWsSection = 'wstoday';
+  if(mode === 'workstation') aiChatClose(); // AI assistant doesn't run in Workstation
   renderNav();
   renderHero();
   renderSection(true);
@@ -8970,7 +8976,7 @@ function openWsAddTask(scheduleToday) {
         <input type="time" class="fi" id="wt-time" /></div>
     </div>
     <div class="fg"><label class="fl">Due date (optional)</label>
-      <input type="date" class="fi" id="wt-due" /></div>
+      <input type="date" class="fi" id="wt-due" min="${todayStr()}" /></div>
     <div class="fg"><label class="fl">Repeat</label>
       <select class="fi" id="wt-repeat">
         <option value="">Does not repeat</option>
@@ -9027,6 +9033,8 @@ function openWsEditTask(id) {
       <div style="flex:1"><label class="fl">Start time</label>
         <input type="time" class="fi" id="wt-time" value="${t.startTime||''}" /></div>
     </div>
+    <div class="fg"><label class="fl">Scheduled date</label>
+      <input type="date" class="fi" id="wt-sched" value="${t.scheduledDate||''}" /></div>
     <div class="fg"><label class="fl">Due date</label>
       <input type="date" class="fi" id="wt-due" value="${t.dueDate||''}" /></div>
     <div class="fg"><label class="fl">Repeat</label>
@@ -9049,6 +9057,7 @@ function saveWsEditTask(id) {
   t.projectId = document.getElementById('wt-project').value || null;
   t.duration = parseInt(document.getElementById('wt-dur').value)||undefined;
   t.startTime = document.getElementById('wt-time').value || null;
+  t.scheduledDate = document.getElementById('wt-sched').value || null;
   t.dueDate = document.getElementById('wt-due').value || null;
   t.repeat = document.getElementById('wt-repeat').value || null;
   if(t.repeat && !t.repeatDoneDates) t.repeatDoneDates = [];
@@ -9426,7 +9435,7 @@ function renderWsProjects(el) {
 function renderWsProjectDetail(el) {
   const p = wsProject(currentWsProjectId);
   if(!p) { currentWsProjectId=null; renderWsProjects(el); return; }
-  const tasks = wsTasksFor(p.id).sort((a,b)=>(a.done?1:0)-(b.done?1:0) || (a.order||0)-(b.order||0));
+  const tasks = wsTasksFor(p.id).sort((a,b)=>(wsIsDoneOn(a,currentDate)?1:0)-(wsIsDoneOn(b,currentDate)?1:0) || (a.order||0)-(b.order||0));
   let h = `<div class="s-head">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
       <button class="ws-carry-btn" onclick="wsBackToProjects()">‹ All projects</button>
@@ -10103,8 +10112,8 @@ function scheduleReminder() {
 // The browser calls our own endpoint below instead of Groq directly.
 const GROQ_URL = '/api/chat';
 
-// Safe top-level keys AI is allowed to touch
-const AI_ALLOWED_KEYS = new Set(['days', 'mal', 'wird', 'practices', 'profile', 'workstation']);
+// Safe top-level keys AI is allowed to touch (LifeOS only — Workstation has no AI integration)
+const AI_ALLOWED_KEYS = new Set(['days', 'mal', 'wird', 'practices', 'profile']);
 
 // Known sub-keys inside a day object
 const AI_DAY_KEYS = new Set(['niyyah', 'tasks', 'prayers', 'nawafil', 'practicesDone', 'wirdCounts', 'journal', 'totalFocusSec', 'focusTime']);
@@ -10271,52 +10280,6 @@ function aiValidatePatch(patch) {
       if (prof.theme && !['light', 'dark', 'sepia'].includes(prof.theme)) return `Invalid theme: "${prof.theme}"`;
       if (prof.fontSize && !['small', 'medium', 'large'].includes(prof.fontSize)) return `Invalid fontSize: "${prof.fontSize}"`;
     }
-
-    // Validate workstation — separate data model from LifeOS/Amal
-    if (key === 'workstation') {
-      wsEnsure();
-      const ws = patch.workstation;
-      if (typeof ws !== 'object' || Array.isArray(ws)) return 'workstation must be an object';
-      const validWsKeys = new Set(['projects', 'newTasks', 'taskUpdates', 'deleteTaskIds', 'reviews']);
-      for (const wk of Object.keys(ws)) { if (!validWsKeys.has(wk)) delete ws[wk]; }
-
-      if (ws.projects !== undefined) {
-        if (!Array.isArray(ws.projects)) return 'workstation.projects must be an array';
-        for (const p of ws.projects) {
-          if (typeof p !== 'object' || !p.id || !p.name) return 'each workstation project must have id and name';
-        }
-        const oldIds = DB.workstation.projects.map(p => p.id);
-        const newIds = ws.projects.map(p => p.id);
-        const removed = oldIds.filter(id => !newIds.includes(id));
-        if (removed.length > 1) return `Refused: trying to remove ${removed.length} workstation projects at once — only 1 deletion allowed per command`;
-      }
-      if (ws.newTasks !== undefined) {
-        if (!Array.isArray(ws.newTasks)) return 'workstation.newTasks must be an array';
-        for (const t of ws.newTasks) {
-          if (typeof t !== 'object' || !t.name) return 'each new workstation task must have a name';
-          if (t.projectId && !DB.workstation.projects.find(p => p.id === t.projectId)) return `Unknown workstation project id: "${t.projectId}"`;
-          if (t.repeat && !['daily', 'weekly'].includes(t.repeat)) return `Invalid repeat value: "${t.repeat}"`;
-        }
-      }
-      if (ws.taskUpdates !== undefined) {
-        if (typeof ws.taskUpdates !== 'object' || Array.isArray(ws.taskUpdates)) return 'workstation.taskUpdates must be an object';
-        const validTaskIds = new Set(DB.workstation.tasks.map(t => t.id));
-        for (const [tid, upd] of Object.entries(ws.taskUpdates)) {
-          if (!validTaskIds.has(tid)) return `Unknown workstation task id: "${tid}"`;
-          if (typeof upd !== 'object' || Array.isArray(upd)) return 'each workstation task update must be an object';
-        }
-      }
-      if (ws.deleteTaskIds !== undefined) {
-        if (!Array.isArray(ws.deleteTaskIds)) return 'workstation.deleteTaskIds must be an array';
-        if (ws.deleteTaskIds.length > 1) return 'Refused: only 1 workstation task deletion allowed per command';
-      }
-      if (ws.reviews !== undefined) {
-        if (typeof ws.reviews !== 'object' || Array.isArray(ws.reviews)) return 'workstation.reviews must be an object';
-        for (const dk of Object.keys(ws.reviews)) {
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(dk)) return `Invalid workstation review date key: "${dk}"`;
-        }
-      }
-    }
   }
 
   return null;
@@ -10376,27 +10339,6 @@ function aiBuildContext() {
       fontSize: DB.profile?.fontSize || 'medium',
       timezone: DB.profile?.timezone || 'Africa/Casablanca',
     },
-    workstation: aiBuildWorkstationContext(),
-  };
-}
-
-// Lean Workstation snapshot: projects, today's plan, backlog, upcoming due
-// dates, and recent reviews — NOT the entire task history (unbounded).
-function aiBuildWorkstationContext() {
-  wsEnsure();
-  const today = todayStr();
-  const tasks = DB.workstation.tasks || [];
-  const toLean = t => ({
-    id: t.id, name: t.name, projectId: t.projectId, note: t.note || '',
-    done: wsIsDoneOn(t, today), scheduledDate: t.scheduledDate, startTime: t.startTime || null,
-    dueDate: t.dueDate || null, repeat: t.repeat || null, duration: t.duration || null,
-  });
-  return {
-    projects: DB.workstation.projects.map(p => ({ id: p.id, name: p.name, emoji: p.emoji, color: p.color, archived: !!p.archived })),
-    todayTasks: tasks.filter(t => t.scheduledDate === today || wsIsRecurringDueOn(t, today)).map(toLean),
-    backlogTasks: tasks.filter(t => !t.repeat && !t.done && (!t.scheduledDate || t.scheduledDate < today)).slice(0, 30).map(toLean),
-    upcomingDue: tasks.filter(t => t.dueDate && t.dueDate >= today && !t.done).slice(0, 15).map(toLean),
-    recentReviews: Object.fromEntries(Object.entries(DB.workstation.reviews || {}).slice(-5)),
   };
 }
 
@@ -10475,9 +10417,6 @@ function aiSnapshotForPatch(patch) {
   if (patch.profile) {
     snap.profile = DB.profile ? JSON.parse(JSON.stringify(DB.profile)) : null;
   }
-  if (patch.workstation) {
-    snap.workstation = JSON.parse(JSON.stringify(DB.workstation));
-  }
   return snap;
 }
 
@@ -10501,7 +10440,6 @@ function aiUndo() {
     DB.profile = snap.profile;
     if (DB.profile.theme) applyTheme(DB.profile.theme);
   }
-  if (snap.workstation !== undefined) DB.workstation = snap.workstation;
 
   _aiLastSnapshot = null;
   clearTimeout(_aiUndoTimer);
@@ -10578,58 +10516,6 @@ function aiApplyPatch(patch) {
     Object.assign(DB.profile, patch.profile);
     if (patch.profile.theme) applyTheme(patch.profile.theme);
   }
-
-  // Workstation — separate data model; projects full-replace, tasks are
-  // additive/targeted-update only (list is unbounded so we never let the
-  // model resend/replace the whole thing).
-  if (patch.workstation) {
-    wsEnsure();
-    const ws = patch.workstation;
-    if (ws.projects) DB.workstation.projects = ws.projects;
-    if (ws.newTasks) {
-      for (const t of ws.newTasks) {
-        DB.workstation.tasks.push({
-          id: genId(), projectId: t.projectId || null, name: t.name, note: t.note || '',
-          duration: t.duration || undefined, pomSessions: t.pomSessions || 4, done: false,
-          scheduledDate: t.scheduledDate || null, startTime: t.startTime || null, dueDate: t.dueDate || null,
-          repeat: t.repeat || null, repeatDoneDates: [], order: Date.now(),
-          focusTime: {}, totalFocusSec: 0, createdAt: Date.now(), completedAt: null,
-        });
-      }
-    }
-    if (ws.taskUpdates) {
-      const allowedFields = ['name','note','projectId','duration','startTime','dueDate','repeat','scheduledDate'];
-      const today = todayStr();
-      for (const [tid, upd] of Object.entries(ws.taskUpdates)) {
-        const t = DB.workstation.tasks.find(x => x.id === tid);
-        if (!t) continue;
-        for (const k of allowedFields) if (upd[k] !== undefined) t[k] = upd[k];
-        if (upd.done !== undefined) {
-          // Recurring tasks track completion per-day via repeatDoneDates, not
-          // a single `done` flag — wsIsDoneOn() ignores `.done` entirely once
-          // `.repeat` is set, so writing t.done here would silently no-op.
-          if (t.repeat) {
-            if (!t.repeatDoneDates) t.repeatDoneDates = [];
-            const idx = t.repeatDoneDates.indexOf(today);
-            if (upd.done && idx < 0) t.repeatDoneDates.push(today);
-            if (!upd.done && idx >= 0) t.repeatDoneDates.splice(idx, 1);
-          } else {
-            t.done = upd.done;
-            t.completedAt = upd.done ? Date.now() : null;
-          }
-        }
-      }
-    }
-    if (ws.deleteTaskIds) {
-      DB.workstation.tasks = DB.workstation.tasks.filter(t => !ws.deleteTaskIds.includes(t.id));
-    }
-    if (ws.reviews) {
-      for (const [dk, rv] of Object.entries(ws.reviews)) {
-        if (!DB.workstation.reviews[dk]) DB.workstation.reviews[dk] = { text: '', createdAt: Date.now() };
-        if (rv.text !== undefined) DB.workstation.reviews[dk].text = rv.text;
-      }
-    }
-  }
 }
 
 /* ════════════════════════════════════════════════
@@ -10639,6 +10525,8 @@ function aiApplyPatch(patch) {
 const aiChatHistory = [];
 
 function aiChatToggle() {
+  // AI assistant is a LifeOS-only feature — not available in Workstation.
+  if (DB.appMode === 'workstation') return;
   const win = document.getElementById('ai-chat-window');
   const cornerBtn = document.getElementById('ai-corner-btn');
   const barBtn  = document.getElementById('ai-chat-toggle');
@@ -10727,7 +10615,7 @@ async function aiChatSend() {
   // Build context snapshot
   const context = aiBuildContext();
 
-  const systemPrompt = `You are SaadOs AI — a warm, helpful personal assistant embedded in an Islamic productivity app. You speak in a natural, friendly tone. You can:
+  const systemPrompt = `You are SaadOs AI — a warm, helpful personal assistant embedded in an Islamic productivity app (LifeOS). You speak in a natural, friendly tone. You can:
 1. Answer questions about the user's data (prayers, tasks, expenses, journal) — it's provided below.
 2. Update the app's data when asked — in that case, FIRST tell the user what you're about to do in plain language, THEN on the very last line output a JSON patch prefixed exactly with "ACTION:" and nothing else after it. Example last line: ACTION:{"days":{"${todayStr()}":{"prayers":{"fajr":{"location":"home","timing":"late"}}}}}
 3. Just have a conversation — talk about Islam, productivity, give advice, anything.
@@ -10755,13 +10643,8 @@ mal.budget: number
 wird: full array of {id,ar,en,target} — include ALL existing items from context.wirdList plus your change, max 1 deletion per command
 practices: full array of {id,name,ar,category,emoji,color} — include ALL existing items from context.practicesList plus your change, max 1 deletion per command, category one of ibadah|ilm|jism|ruh|dunya
 profile: {name, theme:"light"|"dark"|"sepia", fontSize:"small"|"medium"|"large", timezone}
-workstation.projects: full array of {id,name,emoji,color,archived} — include ALL existing items from context.workstation.projects plus your change, max 1 deletion per command
-workstation.newTasks: array of NEW work tasks only {name,note,projectId,duration,startTime,dueDate,repeat:"daily"|"weekly"|null,scheduledDate} — projectId must be an id from context.workstation.projects; scheduledDate "${todayStr()}" schedules for today, omit/null leaves it in the backlog
-workstation.taskUpdates: {[taskId]: {any of name,note,projectId,duration,startTime,dueDate,repeat,done,scheduledDate}} — taskId must come from context.workstation (todayTasks/backlogTasks/upcomingDue), only include fields that change
-workstation.deleteTaskIds: array of existing workstation task ids to delete, max 1 per command
-workstation.reviews: {[YYYY-MM-DD]: {text}} — for saving/updating a Workstation daily reflection
 DO NOT include: recentExpenses, last7days, wirdList, practicesList, index, currentSection, appMode, or any other read-only context field.
-NEVER invent a wird, practice, workstation project, or workstation task id — only use ids already present in context.`;
+NEVER invent a wird, practice, or expense id — only use ids already present in context.`;
 
   try {
     const messages = [
