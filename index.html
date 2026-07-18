@@ -968,7 +968,7 @@ body {
   font-size: 10px;
   letter-spacing: 3px;
   text-transform: uppercase;
-  color: var(--gold);
+  color: var(--sec-accent, var(--gold));
   font-weight: 500;
   margin-bottom: 6px;
 }
@@ -3733,6 +3733,18 @@ let DB = {
   readQueue: [],
   albums: [], // memory albums (playlists of images): {id, name, driveIds:[], thumbDriveId}
   appMode: 'lifeos', // 'lifeos' | 'workstation'
+  // LifeOS customization — section visibility/order/labels/colors, task
+  // templates, and journal prompts. Workstation is NOT affected by any of this.
+  customize: {
+    hiddenSections: [],        // NAV ids hidden from the nav bar
+    sectionOrder: [],          // NAV ids in custom order; falls back to NAV's default order
+    sectionLabels: {},         // { [navId]: 'Custom Label' }
+    sectionColors: {},         // { [navId]: '#hex' }
+    landingSection: 'niyyah',  // which section opens on load
+    taskTemplates: [],         // [{id, name, items:[{name,block,note,duration,pomSessions}]}]
+    journalPromptsEnabled: false,
+    journalPrompts: [],        // string[]
+  },
   // Workstation — fully separate data model from Amal/LifeOS tasks.
   workstation: {
     projects: [], // {id, name, emoji, color, archived, createdAt}
@@ -4354,11 +4366,55 @@ function wsEnsure() {
   if(!DB.workstation.reviews) DB.workstation.reviews = {};
   if(!DB.appMode) DB.appMode = 'lifeos';
 }
+function customizeEnsure() {
+  if(!DB.customize) DB.customize = {};
+  const c = DB.customize;
+  if(!Array.isArray(c.hiddenSections)) c.hiddenSections = [];
+  if(!Array.isArray(c.sectionOrder)) c.sectionOrder = [];
+  if(!c.sectionLabels || typeof c.sectionLabels !== 'object') c.sectionLabels = {};
+  if(!c.sectionColors || typeof c.sectionColors !== 'object') c.sectionColors = {};
+  if(!c.landingSection) c.landingSection = 'niyyah';
+  if(!Array.isArray(c.taskTemplates)) c.taskTemplates = [];
+  if(typeof c.journalPromptsEnabled !== 'boolean') c.journalPromptsEnabled = false;
+  if(!Array.isArray(c.journalPrompts)) c.journalPrompts = [];
+  // Fill in any NAV ids missing from sectionOrder (new sections, first run, etc.)
+  NAV.forEach(n => { if(!c.sectionOrder.includes(n.id)) c.sectionOrder.push(n.id); });
+  // Drop any stale ids no longer in NAV
+  c.sectionOrder = c.sectionOrder.filter(id => NAV.some(n=>n.id===id));
+  // Never allow every section to be hidden — always keep at least one visible
+  if(c.hiddenSections.length >= NAV.length) c.hiddenSections = [];
+}
+// Ordered, filtered nav list for LifeOS honoring the user's customization.
+function visibleNavItems() {
+  customizeEnsure();
+  const c = DB.customize;
+  return c.sectionOrder
+    .filter(id => !c.hiddenSections.includes(id))
+    .map(id => NAV.find(n=>n.id===id))
+    .filter(Boolean);
+}
+function secLabel(id) {
+  customizeEnsure();
+  const custom = DB.customize.sectionLabels[id];
+  if(custom && custom.trim()) return esc(custom.trim());
+  const n = NAV.find(x=>x.id===id);
+  return n ? n.en : id;
+}
+function secColor(id) {
+  customizeEnsure();
+  return DB.customize.sectionColors[id] || null;
+}
 function init() {
   wsEnsure();
+  customizeEnsure();
   applyTheme(DB.profile.theme||'light');
   document.body.setAttribute('data-mode', DB.appMode||'lifeos');
   currentWsSection = 'wstoday';
+  if(DB.appMode !== 'workstation') {
+    const landing = DB.customize.landingSection;
+    const visible = visibleNavItems();
+    currentSection = (landing && visible.some(n=>n.id===landing)) ? landing : (visible[0]?.id || 'niyyah');
+  }
   if(localStorage.getItem('saados_cal_connected')==='1') { calConnected = true; calSilentAuth(); }
   renderNav(); renderHero(); renderSection(true); updateSyncUI();
   updateFabForCurrentMode();
@@ -4373,13 +4429,18 @@ function init() {
 function renderNav() {
   const nav = document.getElementById('float-nav');
   const isWs = DB.appMode === 'workstation';
-  const list = isWs ? WS_NAV : NAV;
+  const list = isWs ? WS_NAV : visibleNavItems();
   const active = isWs ? currentWsSection : currentSection;
-  nav.innerHTML = list.map(n=>`
-    <div class="fn-item ${active===n.id?'active':''}" onclick="navigate('${n.id}')">
+  nav.innerHTML = list.map(n=>{
+    const color = isWs ? null : secColor(n.id);
+    const label = isWs ? n.en : secLabel(n.id);
+    const activeStyle = (!isWs && active===n.id && color) ? ` style="--nav-active-bg:${esc(color)}"` : '';
+    return `
+    <div class="fn-item ${active===n.id?'active':''}" onclick="navigate('${n.id}')"${activeStyle}>
       <div class="fn-icon">${n.icon}</div>
-      <div class="fn-label">${n.en}</div>
-    </div>`).join('');
+      <div class="fn-label">${label}</div>
+    </div>`;
+  }).join('');
 }
 function navigate(id) {
   if(DB.appMode==='workstation') currentWsSection=id; else currentSection=id;
@@ -4410,9 +4471,15 @@ function setAppMode(mode) {
   DB.appMode = mode;
   markUnsaved();
   document.body.setAttribute('data-mode', mode);
-  currentSection = 'niyyah';
-  currentWsSection = 'wstoday';
-  if(mode === 'workstation') aiChatClose(); // AI assistant doesn't run in Workstation
+  if(mode === 'workstation') {
+    currentWsSection = 'wstoday';
+    aiChatClose(); // AI assistant doesn't run in Workstation
+  } else {
+    customizeEnsure();
+    const visible = visibleNavItems();
+    const landing = DB.customize.landingSection;
+    currentSection = (landing && visible.some(n=>n.id===landing)) ? landing : (visible[0]?.id || 'niyyah');
+  }
   renderNav();
   renderHero();
   renderSection(true);
@@ -4458,6 +4525,7 @@ function renderSection(hard) {
     el.style.animation='none'; el.offsetHeight; el.style.animation='';
   }
   if(DB.appMode === 'workstation') {
+    el.style.removeProperty('--sec-accent');
     switch(currentWsSection) {
       case 'wstoday':    renderWsToday(el);    break;
       case 'wsprojects': renderWsProjects(el); break;
@@ -4466,6 +4534,9 @@ function renderSection(hard) {
     if(!hard) el.scrollTop = keptScroll;
     return;
   }
+  const accent = secColor(currentSection);
+  if(accent) el.style.setProperty('--sec-accent', accent);
+  else el.style.removeProperty('--sec-accent');
   switch(currentSection) {
     case 'niyyah':    renderNiyyah(el); break;
     case 'salat':     renderSalat(el);  break;
@@ -4493,8 +4564,12 @@ function renderNiyyah(el) {
 
   let h = `<div class="s-head">
     <div class="s-kicker">Intention</div>
-    <div class="s-title">Niyyah <span class="s-title-ar">نيّة</span></div>
+    <div class="s-title">${secLabel('niyyah')} <span class="s-title-ar">نيّة</span></div>
     <div class="s-sub">${greet}</div>
+  </div>`;
+
+  h += `<div style="display:flex;justify-content:flex-end;margin:-10px 0 14px">
+    <button class="s-btn" style="width:auto;padding:6px 14px;font-size:12px" onclick="openTaskTemplatesPicker()">📋 Templates</button>
   </div>`;
 
   // Niyyah banner
@@ -4629,6 +4704,47 @@ function getWeekUnfinishedTasks() {
     });
   });
   return res;
+}
+
+/* ════════════════════════════════════════════════
+   TASK TEMPLATES (Niyyah quick-add) — Customize LifeOS
+════════════════════════════════════════════════ */
+function openTaskTemplatesPicker() {
+  customizeEnsure();
+  const templates = DB.customize.taskTemplates;
+  document.getElementById('bs-content').innerHTML = `
+    <div class="bs-title">Apply a template</div>
+    ${templates.length ? `
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${templates.map(t => `
+          <div class="s-btn" style="text-align:left;display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="applyTaskTemplate('${t.id}')">
+            <span>${esc(t.name)}</span>
+            <span style="font-size:11px;color:var(--ink4)">${t.items.length} task${t.items.length===1?'':'s'}</span>
+          </div>`).join('')}
+      </div>
+      <div style="font-size:11px;color:var(--ink4);margin-top:14px">Manage templates in Settings → Customize LifeOS.</div>
+    ` : `
+      <div class="empty-state" style="padding:20px 0">
+        <span style="font-size:13px">No templates yet.</span>
+      </div>
+      <div style="font-size:12px;color:var(--ink4)">Create one in Settings → Customize LifeOS — or save today's tasks as a template from there.</div>
+    `}`;
+  document.getElementById('bs-bg').classList.add('open');
+}
+function applyTaskTemplate(id) {
+  customizeEnsure();
+  const t = DB.customize.taskTemplates.find(x=>x.id===id);
+  if(!t) return;
+  const day = getDay(currentDate);
+  if(!day.tasks) day.tasks = [];
+  t.items.forEach(it => {
+    day.tasks.push({
+      id: genId(), name: it.name, block: it.block || BLOCKS[0].id, note: it.note || '',
+      duration: it.duration || undefined, pomSessions: it.pomSessions || 4,
+      done: false, createdAt: currentDate,
+    });
+  });
+  markUnsaved(); closeBS(); renderSection();
 }
 
 /* ════════════════════════════════════════════════
@@ -4948,7 +5064,7 @@ function renderSalat(el) {
 
   let h=`<div class="s-head">
     <div class="s-kicker">Prayer · El Jadida</div>
-    <div class="s-title">Salat <span class="s-title-ar">صلاة</span></div>
+    <div class="s-title">${secLabel('salat')} <span class="s-title-ar">صلاة</span></div>
     <div class="s-sub">The five pillars of your day</div>
   </div>
   <div id="salat-next-banner-wrap"></div>
@@ -5135,7 +5251,7 @@ function renderAmal(el) {
 
   let h=`<div class="s-head">
     <div class="s-kicker">Practices</div>
-    <div class="s-title">Amal <span class="s-title-ar">عمل</span></div>
+    <div class="s-title">${secLabel('amal')} <span class="s-title-ar">عمل</span></div>
     <div class="s-sub">Consistent deeds done with intention</div>
   </div>
   <div class="filter-row">
@@ -5232,7 +5348,7 @@ function getAllReadCategories() {
 function renderRead(el) {
   let h = `<div class="s-head">
     <div class="s-kicker">Daily Reading</div>
-    <div class="s-title">Read</div>
+    <div class="s-title">${secLabel('read')}</div>
     <div class="s-sub">One new idea a day</div>
   </div>`;
 
@@ -6075,7 +6191,7 @@ function deleteWird(id) {
   DB.wird = DB.wird.filter(x=>x.id!==id);
   markUnsaved(); renderSection();
 }
-function closeModal() { document.getElementById('modal-bg').classList.remove('open'); }
+function closeModal() { document.getElementById('modal-bg').classList.remove('open'); renderNav(); }
 
 /* ════════════════════════════════════════════════
    SIJJIL — Free daily journal + Time Machine
@@ -6087,7 +6203,7 @@ function renderMuhasabah(el) {
 
   let h = `<div class="s-head">
     <div class="s-kicker">Journal</div>
-    <div class="s-title">Sijjil <span class="s-title-ar">سجلّ</span></div>
+    <div class="s-title">${secLabel('muhasabah')} <span class="s-title-ar">سجلّ</span></div>
     <div class="s-sub" style="font-family:var(--serif);font-style:italic">Write your day. Revisit your story.</div>
   </div>`;
 
@@ -6223,6 +6339,32 @@ function sjDateToday() {
 }
 
 /* ── Write mode ── */
+/* ── Journal prompts (Customize LifeOS) ── */
+function journalPromptHtml(j) {
+  customizeEnsure();
+  const c = DB.customize;
+  if(!c.journalPromptsEnabled || !c.journalPrompts.length) return '';
+  if(j.promptIndex == null || j.promptIndex >= c.journalPrompts.length) {
+    j.promptIndex = Math.floor(Math.random()*c.journalPrompts.length);
+  }
+  const prompt = c.journalPrompts[j.promptIndex];
+  return `<div style="display:flex;align-items:center;gap:10px;padding:12px 16px;margin-bottom:14px;background:var(--surface);border-left:3px solid var(--sec-accent, var(--gold));border-radius:var(--radius);box-shadow:var(--shadow-sm)">
+    <div style="flex:1;font-family:var(--serif);font-style:italic;font-size:14px;color:var(--ink2)">${esc(prompt)}</div>
+    <button title="Another prompt" onclick="shuffleJournalPrompt()" style="background:none;border:none;cursor:pointer;font-size:15px;color:var(--ink4);flex-shrink:0">🔀</button>
+  </div>`;
+}
+function shuffleJournalPrompt() {
+  customizeEnsure();
+  const c = DB.customize;
+  const day = getDay(sijjilDate);
+  if(!day.journal) day.journal = { text:'', tags:[], images:[], videos:[] };
+  if(c.journalPrompts.length > 1) {
+    let next;
+    do { next = Math.floor(Math.random()*c.journalPrompts.length); } while(next === day.journal.promptIndex);
+    day.journal.promptIndex = next;
+  }
+  markUnsaved(); renderSection();
+}
 function renderSijjilWrite(el, dateLabel) {
   const day = getDay(sijjilDate);
   if(!day.journal) day.journal = { text:'', tags:[], images:[], videos:[] };
@@ -6248,6 +6390,8 @@ function renderSijjilWrite(el, dateLabel) {
       <button class="sj-date-arrow" onclick="sjDateShift(1)" ${isToday?'disabled style="opacity:0.3;cursor:default"':''}>›</button>
       <button class="sj-date-today-pill ${isToday?'hidden':''}" onclick="sjDateToday()">Today</button>
     </div>
+
+    ${journalPromptHtml(j)}
 
     <div class="sj-body-wrap">
       <textarea class="sj-ta" id="sj-ta" rows="10"
@@ -7863,7 +8007,7 @@ function renderMizan(el) {
 
   let h = `<div class="s-head">
     <div class="s-kicker">Balance</div>
-    <div class="s-title">Mizan <span class="s-title-ar">ميزان</span></div>
+    <div class="s-title">${secLabel('mizan')} <span class="s-title-ar">ميزان</span></div>
     <div class="s-sub">Honest patterns over time</div>
   </div>`;
 
@@ -8601,7 +8745,7 @@ function renderMal(el) {
 
   let h = `<div class="s-head">
     <div class="s-kicker">Money</div>
-    <div class="s-title">Māl <span class="s-title-ar">مال</span></div>
+    <div class="s-title">${secLabel('mal')} <span class="s-title-ar">مال</span></div>
     <div class="s-sub">${label}</div>
   </div>`;
 
@@ -9546,6 +9690,11 @@ function openSettings() {
       </div>
     </div>
     <div class="s-section">
+      <div class="s-section-title">Customize LifeOS</div>
+      <div style="font-size:11px;color:var(--ink4);margin-bottom:10px">Reorder or hide nav sections, rename and re-color them, set your landing screen, build quick-add task templates, and add your own journal prompts.</div>
+      <button class="s-btn" onclick="openCustomizeLifeOS()">🎛 Open customization</button>
+    </div>
+    <div class="s-section">
       <div class="s-section-title">Profile</div>
       <div class="fg"><label class="fl">Your name</label>
         <input type="text" class="fi" id="sname" value="${esc(DB.profile.name||'')}" placeholder="Your name"
@@ -9604,6 +9753,234 @@ function setTheme(t) {
   DB.profile.theme=t; applyTheme(t); markUnsaved();
   document.querySelectorAll('.th-btn').forEach(b=>b.classList.toggle('sel',b.dataset.t===t));
 }
+
+/* ════════════════════════════════════════════════
+   CUSTOMIZE LIFEOS
+   Section order/visibility/labels/colors, landing
+   screen, task templates, journal prompts.
+   (LifeOS only — Workstation is untouched by any of this.)
+════════════════════════════════════════════════ */
+const DEFAULT_SEC_COLORS = { niyyah:'#c8a55c', salat:'#7a9ec8', amal:'#8a3828', read:'#4a6572', muhasabah:'#6a4c93', mizan:'#3a6e4c', mal:'#b07818' };
+
+function openCustomizeLifeOS() {
+  customizeEnsure();
+  document.getElementById('modal-content').innerHTML = customizeLifeOSHtml();
+  document.getElementById('modal-bg').classList.add('open');
+}
+function closeCustomizeLifeOS() {
+  document.getElementById('modal-bg').classList.remove('open');
+  // reflect any changes (order/labels/colors/landing) in the live nav immediately
+  renderNav();
+  if(DB.appMode!=='workstation') renderSection(true);
+}
+function refreshCustomizeLifeOS() {
+  document.getElementById('modal-content').innerHTML = customizeLifeOSHtml();
+}
+
+function customizeLifeOSHtml() {
+  const c = DB.customize;
+  const rows = c.sectionOrder.map((id, i) => {
+    const n = NAV.find(x=>x.id===id);
+    const hidden = c.hiddenSections.includes(id);
+    const label = c.sectionLabels[id] || '';
+    const color = c.sectionColors[id] || DEFAULT_SEC_COLORS[id] || '#c8a55c';
+    return `
+    <div style="display:flex;align-items:center;gap:8px;padding:10px;background:var(--surface2);border-radius:var(--radius);margin-bottom:8px;${hidden?'opacity:0.5':''}">
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <button style="background:none;border:none;cursor:pointer;color:var(--ink3);font-size:12px;line-height:1" title="Move up" ${i===0?'disabled':''} onclick="moveCustomSection('${id}',-1)">▲</button>
+        <button style="background:none;border:none;cursor:pointer;color:var(--ink3);font-size:12px;line-height:1" title="Move down" ${i===c.sectionOrder.length-1?'disabled':''} onclick="moveCustomSection('${id}',1)">▼</button>
+      </div>
+      <div style="font-size:16px">${n.icon}</div>
+      <input type="text" class="fi" style="flex:1;min-width:0" placeholder="${n.en}" value="${esc(label)}"
+        onchange="renameCustomSection('${id}', this.value)" />
+      <input type="color" value="${color}" title="Section color" style="width:30px;height:30px;border:none;border-radius:6px;padding:0;cursor:pointer;flex-shrink:0"
+        onchange="recolorCustomSection('${id}', this.value)" />
+      <button title="${hidden?'Show':'Hide'} section" style="background:none;border:none;cursor:pointer;font-size:15px;flex-shrink:0" onclick="toggleCustomSectionVisibility('${id}')">${hidden?'🚫':'👁'}</button>
+    </div>`;
+  }).join('');
+
+  const visible = visibleNavItems();
+  const landingOpts = visible.map(n=>`<option value="${n.id}" ${c.landingSection===n.id?'selected':''}>${esc(secLabel(n.id))}</option>`).join('');
+
+  const templates = c.taskTemplates.map(t => `
+    <div style="display:flex;align-items:center;gap:8px;padding:10px;background:var(--surface2);border-radius:var(--radius);margin-bottom:8px">
+      <div style="flex:1">
+        <div style="font-weight:500;font-size:13px">${esc(t.name)}</div>
+        <div style="font-size:11px;color:var(--ink4)">${t.items.length} task${t.items.length===1?'':'s'}</div>
+      </div>
+      <button class="s-btn" style="width:auto;padding:6px 12px;font-size:12px" onclick="editTaskTemplate('${t.id}')">Edit</button>
+      <button class="s-btn danger" style="width:auto;padding:6px 12px;font-size:12px" onclick="deleteTaskTemplate('${t.id}')">Delete</button>
+    </div>`).join('');
+
+  const prompts = c.journalPrompts;
+
+  return `
+    <div class="modal-title">Customize LifeOS</div>
+
+    <div class="s-section">
+      <div class="s-section-title">Sections</div>
+      <div style="font-size:11px;color:var(--ink4);margin-bottom:10px">Reorder, hide, rename, or recolor any section. Changes apply to the nav bar right away.</div>
+      ${rows}
+    </div>
+
+    <div class="s-section">
+      <div class="s-section-title">Landing screen</div>
+      <div class="fg"><label class="fl">Open to</label>
+        <select class="fi" onchange="setLandingSection(this.value)">${landingOpts}</select>
+      </div>
+    </div>
+
+    <div class="s-section">
+      <div class="s-section-title">Task templates</div>
+      <div style="font-size:11px;color:var(--ink4);margin-bottom:10px">Save a set of recurring tasks and apply them to any day in one tap from Niyyah → 📋 Templates.</div>
+      ${templates || `<div style="font-size:12px;color:var(--ink4);margin-bottom:10px">No templates yet.</div>`}
+      <button class="s-btn" onclick="saveTodayAsTemplatePrompt()">＋ Save today's tasks as a template</button>
+      <button class="s-btn" onclick="editTaskTemplate(null)">＋ New blank template</button>
+    </div>
+
+    <div class="s-section">
+      <div class="s-section-title">Journal prompts</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+          <input type="checkbox" ${DB.customize.journalPromptsEnabled?'checked':''} onchange="toggleJournalPrompts(this.checked)" />
+          Show a prompt above the journal entry box
+        </label>
+      </div>
+      <div class="fg"><label class="fl">Prompts (one per line)</label>
+        <textarea class="fi" rows="5" style="resize:vertical" id="jprompt-ta"
+          placeholder="What am I grateful for today?&#10;What did I struggle with?&#10;Where did I see Allah's hand today?"
+          onchange="saveJournalPrompts(this.value)">${esc(prompts.join('\n'))}</textarea>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="s-btn" style="width:auto;padding:10px 22px" onclick="closeCustomizeLifeOS()">Done</button>
+    </div>`;
+}
+
+function moveCustomSection(id, dir) {
+  const arr = DB.customize.sectionOrder;
+  const i = arr.indexOf(id);
+  const j = i + dir;
+  if(i<0 || j<0 || j>=arr.length) return;
+  [arr[i], arr[j]] = [arr[j], arr[i]];
+  markUnsaved(); refreshCustomizeLifeOS();
+}
+function toggleCustomSectionVisibility(id) {
+  const c = DB.customize;
+  const willHide = !c.hiddenSections.includes(id);
+  if(willHide && c.hiddenSections.length >= NAV.length - 1) {
+    alert('At least one section has to stay visible.');
+    return;
+  }
+  if(willHide) c.hiddenSections.push(id);
+  else c.hiddenSections = c.hiddenSections.filter(x=>x!==id);
+  // if we just hid the current section (or landing section), fall back sensibly
+  if(willHide) {
+    const visible = visibleNavItems();
+    if(DB.appMode!=='workstation' && currentSection===id) currentSection = visible[0]?.id || 'niyyah';
+    if(c.landingSection===id) c.landingSection = visible[0]?.id || 'niyyah';
+  }
+  markUnsaved(); refreshCustomizeLifeOS();
+}
+function renameCustomSection(id, value) {
+  DB.customize.sectionLabels[id] = value.trim();
+  markUnsaved();
+}
+function recolorCustomSection(id, value) {
+  DB.customize.sectionColors[id] = value;
+  markUnsaved();
+}
+function setLandingSection(id) {
+  DB.customize.landingSection = id;
+  markUnsaved();
+}
+
+/* ── Task templates: create/edit/apply/delete ── */
+function saveTodayAsTemplatePrompt() {
+  const day = getDay(currentDate);
+  const tasks = day.tasks || [];
+  if(!tasks.length) { alert("Today doesn't have any tasks yet — add some in Niyyah first, or use \"New blank template\" instead."); return; }
+  const name = window.prompt('Name this template:', '');
+  if(name === null) return;
+  const trimmed = name.trim();
+  if(!trimmed) return;
+  DB.customize.taskTemplates.push({
+    id: genId(), name: trimmed,
+    items: tasks.map(t => ({ name:t.name, block:t.block, note:t.note||'', duration:t.duration||undefined, pomSessions:t.pomSessions||4 })),
+  });
+  markUnsaved(); refreshCustomizeLifeOS();
+}
+let _editingTemplateId = null;
+let _editingTemplateItems = [];
+function editTaskTemplate(id) {
+  _editingTemplateId = id;
+  const t = id ? DB.customize.taskTemplates.find(x=>x.id===id) : null;
+  _editingTemplateItems = t ? JSON.parse(JSON.stringify(t.items)) : [];
+  document.getElementById('modal-content').innerHTML = templateEditorHtml(t ? t.name : '');
+}
+function templateEditorHtml(name) {
+  const rowsHtml = _editingTemplateItems.map((it, i) => `
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+      <input type="text" class="fi" style="flex:1.4" placeholder="Task name" value="${esc(it.name||'')}" onchange="_editingTemplateItems[${i}].name=this.value" />
+      <select class="fi" style="flex:1" onchange="_editingTemplateItems[${i}].block=this.value">
+        ${BLOCKS.map(b=>`<option value="${b.id}" ${it.block===b.id?'selected':''}>${b.icon} ${b.en}</option>`).join('')}
+      </select>
+      <input type="number" class="fi" style="width:60px" placeholder="min" value="${it.duration||''}" min="1" max="480" onchange="_editingTemplateItems[${i}].duration=parseInt(this.value)||undefined" />
+      <button title="Remove" style="background:none;border:none;cursor:pointer;color:var(--rust);font-size:15px" onclick="removeTemplateRow(${i})">✕</button>
+    </div>`).join('');
+  return `
+    <div class="modal-title">${_editingTemplateId ? 'Edit template' : 'New template'}</div>
+    <div class="fg"><label class="fl">Template name</label>
+      <input type="text" class="fi" id="tpl-name" value="${esc(name)}" placeholder="e.g. Weekday routine" /></div>
+    <div class="fg"><label class="fl">Tasks</label>
+      <div id="tpl-rows">${rowsHtml || '<div style="font-size:12px;color:var(--ink4);margin-bottom:8px">No tasks yet — add one below.</div>'}</div>
+      <button class="s-btn" onclick="addTemplateRow()">＋ Add task</button>
+    </div>
+    <div class="modal-footer">
+      <button class="s-btn" style="width:auto;padding:10px 18px" onclick="refreshCustomizeLifeOS()">Cancel</button>
+      <button class="s-btn" style="width:auto;padding:10px 18px;background:var(--gold);color:#fff;border-color:var(--gold)" onclick="saveTemplateEditor()">Save template</button>
+    </div>`;
+}
+function addTemplateRow() {
+  _editingTemplateItems.push({ name:'', block:BLOCKS[0].id, duration:undefined, pomSessions:4 });
+  document.getElementById('modal-content').innerHTML = templateEditorHtml(document.getElementById('tpl-name')?.value || '');
+}
+function removeTemplateRow(i) {
+  const name = document.getElementById('tpl-name')?.value || '';
+  _editingTemplateItems.splice(i,1);
+  document.getElementById('modal-content').innerHTML = templateEditorHtml(name);
+}
+function saveTemplateEditor() {
+  const name = document.getElementById('tpl-name').value.trim();
+  if(!name) { alert('Give the template a name.'); return; }
+  const items = _editingTemplateItems.filter(it => it.name && it.name.trim());
+  if(!items.length) { alert('Add at least one task with a name.'); return; }
+  if(_editingTemplateId) {
+    const t = DB.customize.taskTemplates.find(x=>x.id===_editingTemplateId);
+    if(t) { t.name = name; t.items = items; }
+  } else {
+    DB.customize.taskTemplates.push({ id: genId(), name, items });
+  }
+  _editingTemplateId = null; _editingTemplateItems = [];
+  markUnsaved(); refreshCustomizeLifeOS();
+}
+function deleteTaskTemplate(id) {
+  if(!confirm('Delete this template?')) return;
+  DB.customize.taskTemplates = DB.customize.taskTemplates.filter(t=>t.id!==id);
+  markUnsaved(); refreshCustomizeLifeOS();
+}
+
+/* ── Journal prompts ── */
+function toggleJournalPrompts(enabled) {
+  DB.customize.journalPromptsEnabled = enabled;
+  markUnsaved();
+}
+function saveJournalPrompts(value) {
+  DB.customize.journalPrompts = value.split('\n').map(s=>s.trim()).filter(Boolean);
+  markUnsaved();
+}
+
 async function exportData() {
   const btn = event?.target;
   const originalLabel = btn ? btn.textContent : null;
